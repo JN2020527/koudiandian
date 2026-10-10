@@ -48,6 +48,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);background:rgba(0,0,0,.78);color:#ffe9a8;border:1px solid rgba(255,215,105,.45);padding:8px 16px;border-radius:18px;font-size:15px;z-index:60;pointer-events:none;white-space:nowrap}
 #fsBtn{display:none}
 @media (pointer:coarse){#fsBtn.supported{display:flex}}
+.vp-desk #fsBtn.supported{display:flex}
 /* ---------- player plates ---------- */
 .plate{display:flex;align-items:center;gap:8px;padding:3px 12px 3px 3px;border-radius:999px;background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.28));border:1px solid rgba(255,215,105,.18);white-space:nowrap;position:relative}
 .plate.turn{border-color:var(--gold);background:linear-gradient(90deg,rgba(120,84,10,.75),rgba(0,0,0,.35));box-shadow:0 0 0 1px rgba(255,215,105,.35),0 0 14px rgba(255,215,105,.4)}
@@ -701,6 +702,45 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 @media (orientation:portrait) and (max-width:640px){#rotate{display:flex}#app,#modal,#fx,#train{visibility:hidden}}
 .act.pass.two{font-size:15px;white-space:nowrap;letter-spacing:0}
 @media (max-height:500px) and (max-width:720px){#hudR{gap:3px}#hudR .ibtn{width:25px;height:25px}#hudR .ibtn svg{width:14px;height:14px}}
+/* ============ desktop / tablet (visible height > 500): laid out at ~1280x720 and scaled by --k (CSS zoom) ============ */
+.vp-desk #app{background:radial-gradient(ellipse at 50% 40%,#0d3a29,#05190f 80%)}
+/* zoomed boxes: vw and px variables are multiplied by the zoom too, so divide viewport-based sizes by --k */
+.vp-desk #table{zoom:var(--k);max-width:calc(var(--app-h) * 1.9 / var(--k));margin:0 auto}
+/* narrow windows (layout width only drops below 1200 when --k is 1): keep the top seat clear of the corner HUDs */
+@media (max-width:1199px){.vp-desk .opp.top{padding-left:84px;padding-right:262px}}
+.vp-desk #myhand .tile.lg{--w:var(--tw,50px);--h:calc(var(--w) * 1.38);border-radius:calc(var(--w) * .13)}
+.vp-desk #mymelds .tile.md{--w:calc(var(--tw,50px) * .72);--h:calc(var(--w) * 1.38)}
+.vp-desk #tingpanel{max-width:calc(100vw / var(--k) - 220px);max-height:calc(var(--app-h) / var(--k) - 210px)}
+.vp-desk #hintpop{max-width:min(560px,calc(80vw / var(--k)))}
+.vp-desk #modal .box{zoom:var(--k);width:min(760px,calc(100vw / var(--k) - 24px));max-height:calc(var(--app-h) / var(--k) - 20px)}
+.vp-desk .toast{zoom:var(--k)}
+.vp-desk #train>*{zoom:var(--k)}
+.vp-desk #train{--thw:min(60px,calc((100vw / var(--k) - 90px) / 15.5))}
+.act .kb{display:none;position:absolute;right:-4px;bottom:-4px;min-width:20px;height:20px;padding:0 4px;border-radius:6px;background:rgba(8,26,19,.92);border:1px solid rgba(255,230,163,.75);color:#ffe9a8;font:800 11px/18px var(--ui);text-shadow:none;align-items:center;justify-content:center;pointer-events:none}
+button:focus-visible,.topt:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+/* mouse */
+@media (hover:hover) and (pointer:fine){
+ #myhand.active .tile.ok:not(.sel):not(.drag):hover{transform:translateY(calc(var(--h) * -.1));filter:brightness(1.05);z-index:1}
+ #myhand.active .tile.ok.match:hover{transform:translateY(-6px)}
+ .act .kb{display:flex}
+ .act:hover{filter:brightness(1.12) saturate(1.1)}
+ .ibtn:hover{border-color:var(--gold);color:#fff6d6}
+ .ibtn.on:hover{filter:brightness(1.07)}
+ .gbtn:not(:disabled):hover{filter:brightness(1.07)}
+ .gbtn.ghost:not(:disabled):hover{border-color:var(--gold);color:#fff;background:rgba(0,0,0,.42)}
+ .cta:hover{filter:brightness(1.06)}
+ .tback:hover,.kchip:hover,.wtype:hover,.nbtn:not(:disabled):hover{border-color:var(--gold);color:#fff}
+ .tlink:hover{text-decoration:underline}
+ #hintbar:hover{border-color:var(--gold);background:rgba(0,0,0,.52)}
+ .mclose:hover,#tingpanel .th .x:hover{background:rgba(255,255,255,.14);color:#fff}
+ .hc.can:not(.sel):hover{transform:translateY(-6px)}
+ .hc.can:not(.sel):hover .tile{box-shadow:0 0 0 2px rgba(255,215,105,.7),0 4px 0 #2a8a5f,0 6px 10px rgba(0,0,0,.35)}
+ .pkc:not(.on):hover{background:rgba(255,215,105,.16)}
+ .seg button:not(.on):hover{background:rgba(255,255,255,.1)}
+ .tlk:hover{opacity:1}
+ .wx:hover{background:rgba(179,58,50,.7);color:#fff}
+ .only:hover{color:#fff}
+}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 <script>
@@ -712,12 +752,24 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
   const rules = [];
   try { for (const sh of document.styleSheets) for (const r of sh.cssRules) if (r.media && /height/.test(r.media.mediaText)) rules.push({ r, orig: r.media.mediaText }); } catch (e) {}
   const subs = [];
-  let H = 0, W = 0, n = 0;
+  let H = 0, W = 0, n = 0, K = 1;
+  const zoomOK = !!(window.CSS && CSS.supports && CSS.supports('zoom', '2'));
   function measure() {
     let h = window.innerHeight, w = window.innerWidth;
     if (vv && vv.scale < 1.02) { h = Math.min(h, vv.height); w = Math.min(w, vv.width); }   // ignore pinch-zoom
     const ch = root.clientHeight; if (ch && ch < h - 1 && !(vv && vv.scale >= 1.02)) h = ch;
     return { h: Math.round(h * 100) / 100, w: Math.round(w) };
+  }
+  /* desktop table sizes in unzoomed layout px (plain px so ui.js can read them back); phones keep the stylesheet values */
+  const DV = ['--side', '--toprow', '--pond-h', '--opp-tile', '--sp', '--sw', '--back-w', '--back-h'];
+  function deskVars(lh, lw) {
+    if (!lh) { DV.forEach(k => root.style.removeProperty(k)); return; }
+    const c = (lo, v, hi) => Math.round(Math.max(lo, Math.min(v, hi)) * 2) / 2;
+    const side = c(150, lw * 0.144, 184), col = (lw - 2 * side - 32) / 4;
+    const sp = c(18, lh * 0.031, 26), bw = c(20, lh * 0.033, 28);
+    const v = { '--side': side, '--toprow': c(84, lh * 0.125, 112), '--pond-h': c(30, Math.min(lh * 0.06, (col - 8) / 4 - 3), 48),
+      '--opp-tile': c(22, lh * 0.036, 30), '--sp': sp, '--sw': c(28, sp * 1.62, 42), '--back-w': bw, '--back-h': c(28, bw * 1.38, 39) };
+    for (const k in v) root.style.setProperty(k, v[k] + 'px');
   }
   function apply() {
     const m = measure();
@@ -730,6 +782,11 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
       if (o.r.media.mediaText !== t) try { o.r.media.mediaText = t; } catch (e) {}
     }
     root.classList.toggle('vp-short', H <= 500);
+    /* desktop / tablet: the table is designed at ~1280x720 and scaled up with CSS zoom */
+    K = H > 500 && zoomOK ? Math.round(Math.max(1, Math.min(W / 1280, H / 720, 2.5)) * 1000) / 1000 : 1;
+    root.style.setProperty('--k', K);
+    root.classList.toggle('vp-desk', H > 500);
+    deskVars(H > 500 ? H / K : 0, Math.min(W, H * 1.9) / K);
     for (const f of subs) try { f(H, W); } catch (e) { console.error(e); }
     return true;
   }
@@ -746,7 +803,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
   if (vv) { vv.addEventListener('resize', update); }
   if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', burst);
   apply();
-  window.KDDVP = { get h() { return H; }, get w() { return W; }, get count() { return n; }, short: () => H <= 500, on: f => subs.push(f), update: () => apply() };
+  window.KDDVP = { get h() { return H; }, get w() { return W; }, get k() { return K; }, get count() { return n; }, short: () => H <= 500, on: f => subs.push(f), update: () => apply() };
 })();
 </script>
 </head>
@@ -2289,7 +2346,7 @@ function renderMe() {
   sizeHand(items.length, drawn != null, me.melds);
   $('myhand').innerHTML = `<div class="hrow">${html}</div>`;
   const selEl = $('myhand').querySelector('.tile.sel');
-  if (selEl) selEl.insertAdjacentHTML('beforeend', `<span class="up">${tingMode ? '再点报听' : discardsMade < 3 ? '再点或上拖' : discardsMade < 12 ? '再点打出' : '打出'}</span>`);
+  if (selEl) selEl.insertAdjacentHTML('beforeend', `<span class="up">${tingMode ? '再点报听' : finePointer ? (discardsMade < 12 ? '再点打出' : '打出') : discardsMade < 3 ? '再点或上拖' : discardsMade < 12 ? '再点打出' : '打出'}</span>`);
   if (pending && pending.kind === 'claim') $('myhand').querySelectorAll('.tile').forEach(el => { if (+el.dataset.t === pending.t) el.classList.add('match'); });
   $('selhint').className = sel && clickable && discardsMade < 6 ? 'on' : '';
   $('myhand').className = clickable ? 'active' : (st.result ? '' : 'wait');
@@ -2312,6 +2369,12 @@ function renderMe() {
     if (o.peng) acts.push(['peng', `碰${mt}`, 'peng']);
     if (o.hu) acts.push(['hu', `胡${mt}`, 'hu']);
   }
+  let gangKey = false;
+  acts.forEach(a => {
+    const c = a[0].split(' ')[0]; let kb = a[2] === 'ting' ? 'T' : HOTKEY_LABEL[c];
+    if (c === 'gang') { if (gangKey) kb = null; gangKey = true; }
+    if (kb) a[1] += `<i class="kb">${kb}</i>`;
+  });
   const claimP = pending && pending.kind === 'claim' ? pending : null;
   const key = acts.map(a => a[0] + ':' + a[2]).join('|') + (claimP ? '@' + claimP.t + ':' + st.lastDiscard.p : '');
   if ($('actions').dataset.key !== key) {
@@ -2337,10 +2400,23 @@ function renderMe() {
   } else { tp.className = ''; tp.innerHTML = ''; }
 }
 
+const HOTKEY_LABEL = { hu: 'H', peng: 'P', gang: 'G', pass: '空格' };
+const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
 /* phones in landscape: hand tiles as large as fit on one row */
 function sizeHand(n, hasDrawn, melds) {
   const meEl = $('me');
-  if (!mqLand.matches) { meEl.style.removeProperty('--tw'); return; }
+  if (!mqLand.matches) {
+    /* desktop: measured in the table's unzoomed layout px (clientWidth ignores CSS zoom) */
+    const cs = getComputedStyle(meEl), lh = (window.KDDVP ? window.KDDVP.h / window.KDDVP.k : window.innerHeight);
+    const avail = meEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8;
+    const meldTiles = melds.reduce((a, m) => a + (m.type === 'peng' ? 3 : 4), 0);
+    const fixed = n * 3 + (melds.length ? 16 + melds.length * 11 : 0);
+    const units = n + (hasDrawn ? 0.35 : 0) + meldTiles * 0.72;
+    const tw = Math.max(36, Math.min((avail - fixed) / units, lh * 0.088, 72));
+    meEl.style.setProperty('--tw', tw.toFixed(1) + 'px');
+    return;
+  }
   const cs = getComputedStyle(meEl);
   const avail = meEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 4;
   const meldTiles = melds.reduce((a, m) => a + (m.type === 'peng' ? 3 : 4), 0);
@@ -2395,17 +2471,20 @@ function computeHint(rem) {
 
 /* ---------------- fx ---------------- */
 function rectOf(el) { return el ? el.getBoundingClientRect() : null; }
+/* desktop CSS zoom factor: getBoundingClientRect / pointer coords are screen px, transforms inside #table are zoomed */
+const zoomK = () => (window.KDDVP && window.KDDVP.k) || 1;
 function fly(target, src, scale) {
   if (!target || !src || !target.animate) return;
-  const r = target.getBoundingClientRect();
-  const dx = (src.left + src.width / 2) - (r.left + r.width / 2), dy = (src.top + src.height / 2) - (r.top + r.height / 2);
+  const r = target.getBoundingClientRect(), k = zoomK();
+  const dx = ((src.left + src.width / 2) - (r.left + r.width / 2)) / k, dy = ((src.top + src.height / 2) - (r.top + r.height / 2)) / k;
   target.animate([{ transform: `translate(${dx}px,${dy}px) scale(${scale || 1.4})`, opacity: 0.85 }, { transform: 'translate(0,0) scale(1)', opacity: 1 }],
     { duration: 280 * Math.max(SPEED, 0.5), easing: 'cubic-bezier(.2,.8,.3,1)' });
 }
 function stampAt(el, text, kind, big) {
   const fx = $('fx'); const r = el ? el.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
   const d = document.createElement('div'); d.className = 'stamp ' + kind;
-  d.style.left = (r.left + r.width / 2) + 'px'; d.style.top = (r.top + r.height / 2) + 'px';
+  const k = zoomK(); if (k !== 1) d.style.zoom = k;
+  d.style.left = (r.left + r.width / 2) / k + 'px'; d.style.top = (r.top + r.height / 2) / k + 'px';
   d.innerHTML = (big ? '<div class="ray"></div>' : '') + `<span style="position:relative">${text}</span>`;
   fx.appendChild(d);
   const dur = big ? 1500 : 950;
@@ -2492,7 +2571,7 @@ hand.addEventListener('pointermove', e => {
   if (!drag) return;
   drag.dx = e.clientX - drag.x0; drag.dy = e.clientY - drag.y0;
   if (!drag.moved && (drag.dy < -10 || Math.abs(drag.dx) > 14)) drag.moved = true;
-  if (drag.moved) { drag.el.classList.add('drag'); drag.el.style.transform = `translate(${drag.dx * 0.6}px,${Math.min(0, drag.dy)}px)`; }
+  if (drag.moved) { const k = zoomK(); drag.el.classList.add('drag'); drag.el.style.transform = `translate(${drag.dx * 0.6 / k}px,${Math.min(0, drag.dy) / k}px)`; }
 });
 function endDrag(e, cancel) {
   if (!drag) return; const d = drag; drag = null;
@@ -2558,7 +2637,37 @@ if (window.KDDVP) window.KDDVP.on(() => { clearTimeout(window.__rz); window.__rz
 window.addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(render, 150); });
 document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && !$('modal').classList.contains('hidden') && $('nextBtn') && $('train').classList.contains('hidden')) { e.preventDefault(); $('nextBtn').click(); return; }
-  if (e.key === 'Escape') { if (tingMode) tingMode = false; sel = null; hintOpen = false; render(); } });
+  if (e.key === 'Escape') { if (tingMode) tingMode = false; sel = null; hintOpen = false; render(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || !$('modal').classList.contains('hidden') || !$('train').classList.contains('hidden')) return;
+  if (hotkey(e.key.length === 1 ? e.key.toLowerCase() : e.key)) e.preventDefault();
+});
+/* desktop keyboard: ←/→ pick a tile, Enter/↑ discard it, Space = 过, H/P/G/T = 胡/碰/杠/听, F = fullscreen */
+function hotkey(k) {
+  if (k === 'f') { $('fsBtn').click(); return true; }
+  if (!st || !pending || !pending.resolve) return false;
+  const btn = sel => $('actions').querySelector(sel);
+  const press = b => { if (!b) return false; b.click(); return true; };
+  if (k === 'h') return press(btn('[data-act="hu"]'));
+  if (k === 'p') return press(btn('[data-act="peng"]'));
+  if (k === 'g') return press(btn('.act.gang'));
+  if (k === 't') return press(btn('[data-act="ting"]'));
+  if (pending.kind === 'claim') return k === ' ' ? press(btn('[data-act="pass"]')) : false;
+  if (!canAct()) return k === ' ' || k === 'Enter' ? press(btn('[data-act="pass"]')) : false;
+  const tiles = [...hand.querySelectorAll('.tile.ok')];
+  if (!tiles.length) return false;
+  const cur = tiles.findIndex(el => el.classList.contains('sel'));
+  if (k === 'ArrowLeft' || k === 'ArrowRight') {
+    const i = cur < 0 ? (k === 'ArrowLeft' ? tiles.length - 1 : 0) : (cur + (k === 'ArrowLeft' ? -1 : 1) + tiles.length) % tiles.length;
+    sel = { t: +tiles[i].dataset.t, d: tiles[i].dataset.d === '1' }; Snd.tick(); renderMe(); return true;
+  }
+  if (k === 'Enter' || k === 'ArrowUp' || k === ' ') {
+    if (cur >= 0) { doDiscard(+tiles[cur].dataset.t, tiles[cur]); return true; }
+    if (k === ' ' && press(btn('[data-act="pass"]'))) return true;
+    const el = tiles.find(x => x.classList.contains('drawn')) || tiles[tiles.length - 1];
+    sel = { t: +el.dataset.t, d: el.dataset.d === '1' }; Snd.tick(); renderMe(); return true;
+  }
+  return false;
+}
 /* fullscreen + landscape lock (Android Chrome etc.; silently ignored where unsupported, e.g. iPhone Safari) */
 const docEl = document.documentElement;
 const reqFS = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
@@ -2589,7 +2698,7 @@ function showRules() {
   <h3>算分</h3><ul><li>得分 = 底分（没有龙时 = 胡的那张牌的点数；有龙时 = 每种龙 20）；自摸 ×2；每个暗杠再 ×2。</li><li>自摸：三家各付一份。点炮：没报听的人点炮 → 一个人包三家；已报听的人点炮 → 三家各付一份。</li><li>不带耗子、不带庄分；牌墙摸完没人胡算流局，庄家没胡就轮庄。</li></ul>
   <h3>龙（加分牌型）</h3><ul><li><b>青龙</b>：清一色，整手牌连副露都是同一门数字牌，没有字牌，什么牌型都行。</li><li><b>七对龙</b>：七对胡牌，只能门清；四张一样的算两对。</li><li><b>一条龙</b>：普通牌型里有同一门的 123、456、789 三组顺子（门清，不能吃）。</li><li>每种龙底分 <b>20</b>，可以叠加：青龙 + 七对龙 = 40，青龙 + 一条龙 = 40（七对龙和一条龙不会同时出现）。有龙时<b>底分代替胡牌那张的点数</b>，再算自摸 ×2、暗杠 ×2。</li><li>注意：<b>能不能胡仍然看胡的那张牌</b>——要报听、听口要有 6 点以上才能报听；胡 1–2 点的牌不能胡，3–5 点只能自摸，6 点以上才能点炮胡，有龙也一样。</li><li>例：青龙 20 + 七对龙 20 = 40 × 自摸 2 = 80 分，三家各付 80。</li></ul>
   <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数，再比好进张，好进张一样再比总进张；都一样时才看孤张字牌、点数等小细节。</li></ul>
-  <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>右上角的对话气泡按钮是「语音报牌」：开着时会念出每张打出的牌，以及碰、杠、听、胡、自摸；和音效按钮分开控制。</li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li></ul></div>
+  <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>右上角的对话气泡按钮是「语音报牌」：开着时会念出每张打出的牌，以及碰、杠、听、胡、自摸；和音效按钮分开控制。</li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li><li>电脑：鼠标点选、再点打出；键盘 <b>← →</b> 选牌，<b>Enter</b> 或 <b>↑</b> 打出，<b>空格</b> 过，<b>H</b> 胡 · <b>P</b> 碰 · <b>G</b> 杠 · <b>T</b> 听，<b>Esc</b> 取消，<b>F</b> 全屏。</li></ul></div>
   <div class="mfoot"><button class="gbtn" id="closeRules2">知道了</button></div>`);
   $('closeRules').onclick = hideModal; $('closeRules2').onclick = hideModal;
 }
@@ -3181,6 +3290,10 @@ root.addEventListener('click', e => {
 root.addEventListener('change', e => { if (e.target.dataset.act === 'revOnly') { R.only = e.target.checked; renderReview(); } });
 document.addEventListener('keydown', e => {
   if (scr.name === 'review') { if (e.key === 'ArrowRight') ACT.revNext(); else if (e.key === 'ArrowLeft') ACT.revPrev(); }
+  if (scr.name === 'drill' && e.key === 'Enter' && $('modal').classList.contains('hidden')) {
+    const b = root.querySelector('[data-act="nextQ"],[data-act="confirm"],[data-act="tsubmit"]:not(:disabled)');
+    if (b) { e.preventDefault(); b.click(); }
+  }
 });
 $('menuBtn').addEventListener('click', showMenu);
 
