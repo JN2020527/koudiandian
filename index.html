@@ -1,34 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<!--
-  山西扣点点麻将练习 V6
-  
-  V6 优化内容(2026-10):
-  1. AI决策算法优化
-     - 等待权重提升: 6-10点权重提升60%,更重视可接炮的牌
-     - 多面听奖励: 3+听口+20分,2听口+10分
-     - 早期报听激励: 根据剩余牌数动态调整(5-15分)
-     - 碰牌策略优化: 1向听才放弃碰牌(原2向听)
-  
-  2. 性能提升(相比V5,基于1000局测试):
-     ✅ 报听率: 5.05% → 6.1% (提升20%)
-     ✅ 放炮率: 11.2% → 10.3% (降低8%)
-     ✅ 自摸率: 50.1% → 52.6% (提升5%)
-  
-  3. 训练效果
-     - AI对手更有挑战性
-     - 更接近真实对局场景
-     - 更好的防守意识
-  
-  原V5版本: koudiandian-v5.html
--->
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b3a29">
-<title>山西扣点点 · 麻将 V6</title>
+<title>山西扣点点 · 麻将</title>
 <style>
 :root{
  --gold:#ffd769;--gold2:#e7b23c;--ink:#f4efe0;--muted:#b9d6c8;--muted2:#8fb3a2;
@@ -247,6 +225,10 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .wcell .wk{font-size:10px;font-weight:800;border-radius:4px;padding:0 3px;background:#2f9e5b;color:#fff}
 .wcell.zm .wk{background:#c9811c}.wcell.no .wk{background:#7a7a7a}.wcell.no .wp b{color:#ff9f8f}
 .wcell .wr{color:var(--muted)}
+.wcell{position:relative}.wcell .wl{position:absolute;top:-12px;left:50%;transform:translateX(-50%);z-index:2;font-size:9px;font-weight:900;line-height:1;padding:2px 4px;border-radius:6px;background:linear-gradient(#ffe48a,#e3a52c);color:#4a2a00;box-shadow:0 1px 2px rgba(0,0,0,.4);white-space:nowrap}
+.wcell.long .wp b{color:#ffd54a;text-shadow:0 0 6px rgba(255,200,60,.6)}
+.topt .tsum .tmax{margin-top:2px;font-size:9px;color:#ffd77a;white-space:nowrap}
+.wt.lg{color:#ffd54a;font-weight:700}
 .topt .tsum{display:flex;flex-direction:column;align-items:center;font-size:10px;color:var(--muted);line-height:1.2;padding-left:8px;border-left:1px solid rgba(255,255,255,.12);margin-left:2px}
 .topt .tsum b{font-size:20px;color:var(--gold);font-variant-numeric:tabular-nums}
 .topt .rec{position:absolute;top:-9px;left:10px;background:var(--gold-grad);color:#3b2a00;font-size:10px;font-weight:800;border-radius:999px;padding:0 7px;line-height:16px;box-shadow:var(--sh1)}
@@ -278,6 +260,9 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .eq .term{background:rgba(0,0,0,.28);border:1px solid rgba(255,215,105,.3);border-radius:10px;padding:4px 10px;display:flex;align-items:center;gap:6px}
 .eq .term .tile{--w:18px;--h:25px;border-radius:3px;box-shadow:0 1px 0 #2a8a5f}
 .eq .op{color:var(--muted);font-weight:700}
+.eq .term.long{background:linear-gradient(#7a3cff33,#ffb02033);border-color:#ffc94a;color:#ffe08a;font-weight:900}
+.lbadges{display:flex;gap:6px;justify-content:center;margin-bottom:2px}
+.lbadge{font-size:12px;font-weight:900;letter-spacing:1px;padding:2px 10px;border-radius:999px;background:linear-gradient(#fff0a8,#e3a52c);color:#4a2400;box-shadow:0 0 12px rgba(255,200,60,.55),inset 0 1px 0 #fff8d0}
 .eq .total{background:linear-gradient(#ffe9a0,#e7b23c);color:#3b2a00;font-weight:900;border-color:#fff1c2}
 .payrule{text-align:center;font-size:12.5px;color:var(--muted);margin:6px 0 10px}
 .pays{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -563,6 +548,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .sw .pts{font-size:14px;color:var(--gold);margin-left:4px}
 .stags{display:flex;gap:6px;flex-wrap:wrap}
 .tag{font-size:13px;padding:3px 10px;border-radius:999px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.25)}
+.tag.lg{background:linear-gradient(#ffe48a,#e3a52c);border-color:#fff0b0;color:#4a2400;font-weight:900}.bwi .lgt{font-style:normal;color:#ffd54a;font-weight:800;margin-right:2px}
 .tag.z{background:#2f9e5b;border-color:#5be08a}.tag.t{background:#c9811c;border-color:#ffd769}.tag.n{background:#7a2f2a;border-color:#ff8a7a}
 .shand{display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap}
 .shand .hts{gap:1px}.shand .wt{margin-left:6px}
@@ -755,7 +741,6 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
  <div class="sub">扣点点需要横屏，像真正的牌桌一样<br>（如果横过来没反应，请关闭手机的"竖排方向锁定"）</div>
 </div>
 <script>
-<script>
 /* ===== 山西扣点点 game logic (pure, shared by UI and node tests) ===== */
 (function (root) {
 'use strict';
@@ -832,6 +817,52 @@ function isSevenPairs(c, nm) {
 }
 function isWin(c, nm) { return isWinNormal(c) || isSevenPairs(c, nm); }
 function winShape(c, nm) { return isWinNormal(c) ? 'normal' : (isSevenPairs(c, nm) ? 'qidui' : null); }
+
+/* ---------- 龙 (bonus hands) ----------
+   青龙 qing   : whole hand incl. melds is one number suit (no honors), any winning shape
+   七对龙 qidui: seven pairs (concealed only; a quad counts as two pairs)
+   一条龙 yitiao: normal shape containing concealed sequences 123 456 789 of one suit
+   Each 龙 type is worth 20; types stack additively and REPLACE the winning tile's points. */
+const LONG_NAMES = { qing: '青龙', qidui: '七对龙', yitiao: '一条龙' };
+const LONG_PTS = 20;
+function isQingyise(c, melds) {
+  let suit = -1;
+  for (let t = 0; t < 34; t++) if (c[t]) { if (t >= 27) return false; const s = (t / 9) | 0; if (suit < 0) suit = s; else if (s !== suit) return false; }
+  for (const m of melds || []) { if (m.tile >= 27) return false; const s = (m.tile / 9) | 0; if (suit < 0) suit = s; else if (s !== suit) return false; }
+  return suit >= 0;
+}
+function isYitiao(c) {
+  if (sum(c) % 3 !== 2) return false;
+  for (let s = 0; s < 3; s++) {
+    const b = s * 9; let ok = true;
+    for (let k = 0; k < 9; k++) if (!c[b + k]) { ok = false; break; }
+    if (!ok) continue;
+    for (let k = 0; k < 9; k++) c[b + k]--;
+    const win = isWinNormal(c);
+    for (let k = 0; k < 9; k++) c[b + k]++;
+    if (win) return true;
+  }
+  return false;
+}
+/* 龙 types of a complete winning hand (counts c of the concealed hand incl. the winning tile, exposed melds) */
+function longTypesC(c, melds) {
+  melds = melds || []; const nm = melds.length, r = [];
+  let n = 0; for (let i = 0; i < 34; i++) n += c[i];
+  if (n + 3 * nm !== 14 || !isWin(c, nm)) return r;
+  if (isQingyise(c, melds)) r.push('qing');
+  if (isSevenPairs(c, nm)) r.push('qidui');
+  else if (isYitiao(c)) r.push('yitiao');
+  return r;
+}
+function longTypes(hand, melds) { return longTypesC(counts(hand), melds); }
+/* score of a winning hand: base (龙 total or tile points) × 2 if 自摸 × 2 per 暗杠 */
+function scoreFor(hand, melds, t, zimo) {
+  melds = melds || [];
+  const longs = longTypes(hand, melds), ag = melds.filter(m => m.type === 'angang').length;
+  const base = longs.length ? LONG_PTS * longs.length : pts(t);
+  const mult = (zimo ? 2 : 1) * Math.pow(2, ag);
+  return { longs, base, angang: ag, mult, score: base * mult };
+}
 
 /* waits for a 13-type hand (counts c, nm exposed melds) */
 function waitsOf(c, nm) {
@@ -935,20 +966,19 @@ function applyBugang(st, p, t) {
 }
 function nextDealer(st, winner) { return winner === st.dealer ? st.dealer : (st.dealer + 1) % 4; }
 
-/* scoring: score = tile points ×2 if 自摸, ×2 per 暗杠 of the winner.
+/* scoring: base = 20 per 龙 type (stacking) if any, else the winning tile's points; ×2 if 自摸, ×2 per 暗杠 of the winner.
    自摸: each of the 3 others pays score.
    点炮 by a player who had NOT 报听: discarder 包胡 — pays for all three (3×score).
    点炮 by a player who HAD 报听: 三家分摊 — each of the 3 others pays score. */
 function computeScore(st, w, t, zimo, from) {
   const pl = st.players[w];
-  const base = pts(t), ag = pl.melds.filter(m => m.type === 'angang').length;
-  const mult = (zimo ? 2 : 1) * Math.pow(2, ag), score = base * mult;
+  const { longs, base, angang: ag, mult, score } = scoreFor(pl.hand || [], pl.melds || [], t, zimo);
   const pay = [0, 0, 0, 0]; let mode;
   if (zimo) { mode = 'zimo'; for (let i = 0; i < 4; i++) if (i !== w) pay[i] -= score; }
   else if (!st.players[from].ting) { mode = 'baohu'; pay[from] -= 3 * score; }
   else { mode = 'fentan'; for (let i = 0; i < 4; i++) if (i !== w) pay[i] -= score; }
   pay[w] = -(pay[0] + pay[1] + pay[2] + pay[3]) + pay[w];
-  return { base, angang: ag, mult, score, pay, mode };
+  return { base, longs, angang: ag, mult, score, pay, mode };
 }
 function settleWin(st, w, t, zimo, from) {
   const pl = st.players[w];
@@ -956,7 +986,7 @@ function settleWin(st, w, t, zimo, from) {
   if (!canWinTile(t, zimo)) throw new Error('illegal win tile');
   if (!zimo) { pl.hand.push(t); markClaimed(st); }
   const c = counts(pl.hand);
-  const shape = winShape(c, pl.melds.length);
+  const shape = isSevenPairs(c, pl.melds.length) ? 'qidui' : winShape(c, pl.melds.length);
   if (!shape) throw new Error('not a winning hand');
   const sc = computeScore(st, w, t, zimo, from);
   for (let i = 0; i < 4; i++) st.scores[i] += sc.pay[i];
@@ -1056,10 +1086,25 @@ function isIsolated(c, t) {
   for (let d = -2; d <= 2; d++) { if (!d) continue; const rr = r + d; if (rr >= 0 && rr <= 8 && c[t + d]) return false; }
   return true;
 }
-// V6优化: 提升6-10点权重(可接炮),提升3-5点权重(自摸有价值)
-function waitWeight(w) { 
-  const p = pts(w); 
-  return p >= 6 ? 1.5 + p / 10 : p >= 3 ? 0.8 : 0.15; 
+/* value of one remaining copy of wait w; base = potential base score if it wins (龙 aware) */
+function waitWeight(w, base) { const p = pts(w), b = base == null ? p : base; return p >= 6 ? 1 + b / 20 : p >= 3 ? 0.45 * Math.max(1, b / 10) : 0.08; }
+/* potential base score per wait for a 13-tile concealed counts c + melds */
+function waitBases(c, melds, waits) {
+  const out = {};
+  for (const w of waits) { c[w]++; const L = longTypesC(c, melds); c[w]--; out[w] = { longs: L, base: L.length ? LONG_PTS * L.length : pts(w) }; }
+  return out;
+}
+/* 龙 plans the AI / hint may chase: 青龙 when few off-suit tiles, 七对龙 when many pairs */
+function longPlan(c, melds) {
+  const nm = melds.length, sc = [0, 0, 0];
+  let off = 0;
+  for (let t = 0; t < 27; t++) sc[(t / 9) | 0] += c[t];
+  for (const m of melds) if (m.tile < 27) sc[(m.tile / 9) | 0] += 3;
+  const suit = sc.indexOf(Math.max(...sc));
+  for (let t = 0; t < 34; t++) if (c[t] && (t >= 27 || ((t / 9) | 0) !== suit)) off += c[t];
+  const meldOff = melds.some(m => m.tile >= 27 || ((m.tile / 9) | 0) !== suit);
+  let pairs = 0; for (const x of c) pairs += x >> 1;
+  return { suit, off: meldOff ? 99 : off, pairs: nm ? 0 : pairs };
 }
 function evalDiscards(st, p) {
   const pl = st.players[p], c = counts(pl.hand), nm = pl.melds.length;
@@ -1068,6 +1113,7 @@ function evalDiscards(st, p) {
   const cands = [];
   for (let t = 0; t < 34; t++) if (c[t] > 0) { c[t]--; cands.push({ tile: t, s: shanten(c, nm) }); c[t]++; }
   const minS = Math.min(...cands.map(x => x.s));
+  const plan = longPlan(c, pl.melds);
   const near = new Array(34).fill(false);
   for (let t = 0; t < 34; t++) if (c[t]) {
     near[t] = true;
@@ -1081,12 +1127,9 @@ function evalDiscards(st, p) {
     else if (x.s === 0) {
       x.waits = waitsOf(c, nm); x.legal = canTingWith(x.waits);
       x.ukeire = x.waits.reduce((a, w) => a + rem[w], 0); x.kinds = x.waits.length;
-      // V6优化: 多面听额外奖励
-      const multiBonus = x.kinds >= 3 ? 20 : x.kinds === 2 ? 10 : 0;
-      // V6优化: 早期报听激励(剩余牌多时更激进)
-      const remainingTiles = remaining(st);
-      const earlyTingBonus = x.legal ? (remainingTiles > 40 ? 15 : remainingTiles > 30 ? 10 : 5) : 0;
-      x.val = x.legal ? 60 + x.waits.reduce((a, w) => a + rem[w] * waitWeight(w) * 4, 0) + multiBonus + earlyTingBonus : 10 + x.ukeire;
+      x.wb = waitBases(c, pl.melds, x.waits);
+      x.long = x.waits.some(w => x.wb[w].longs.length && pts(w) >= 3);
+      x.val = x.legal ? 60 + x.waits.reduce((a, w) => a + rem[w] * waitWeight(w, x.wb[w].base) * 4, 0) : 10 + x.ukeire;
     } else {
       let u = 0, k = 0, u6 = 0;
       for (let y = 0; y < 34; y++) if (near[y] && c[y] < 4 && rem[y] > 0) {
@@ -1101,6 +1144,13 @@ function evalDiscards(st, p) {
     else if (x.isolated && (tp === 1 || tp === 9)) bias += 2;
     else if (x.isolated) bias += 1;
     if (tp <= 2) bias += 1.5; else if (tp >= 6 && x.tile < 27) bias -= 1;
+    // chase 龙 when close: 青龙 (dump off-suit tiles), 七对龙 (keep pairs)
+    if (minS >= 1 && !threats.length) {
+      const offT = x.tile >= 27 || ((x.tile / 9) | 0) !== plan.suit;
+      if (plan.off <= 3) { if (offT) { bias += 105; x.plan = 'qing'; } else bias -= 2; }
+      else if (plan.off <= 5) { if (offT) { bias += 12; x.plan = 'qing'; } }
+      if (plan.pairs >= 5 && x.s <= minS + 1) { if (c[x.tile] === 2) bias -= 8; else if (c[x.tile] === 1) { bias += 6; x.plan = x.plan || 'qidui'; } }
+    }
     x.bias = bias;
     const defW = threats.length ? (minS >= 2 ? 120 : minS === 1 ? 40 : 10) : 0;
     x.total = -x.s * 100 + x.val + bias - x.danger * defW;
@@ -1134,8 +1184,10 @@ const AI = {
     const s0 = shanten(c, nm);
     if (o.gang) { c[t] -= 3; const s = shanten(c, nm + 1); c[t] += 3; if (s <= s0) return 'gang'; }
     if (o.peng) {
-      // V6优化: 改为1向听才放弃碰牌(原来是2向听)
-      if (threatsFor(st, q).length && s0 >= 1) return 'pass';
+      if (threatsFor(st, q).length && s0 >= 2) return 'pass';
+      const plan = longPlan(c, pl.melds);
+      if (plan.pairs >= 5 && s0 >= 1) return 'pass';                                    // keep 七对龙 alive
+      if (plan.off <= 5 && (t >= 27 || ((t / 9) | 0) !== plan.suit)) return 'pass';      // keep 青龙 alive
       c[t] -= 2; const s = bestAfterRemoval(st, q, c, nm + 1); c[t] += 2;
       if (s < s0) return 'peng';
     }
@@ -1146,7 +1198,7 @@ const AI = {
 const api = { SUITS, HONORS, NUMS, SEAT_NAMES, pts, tname, counts, shanten, shantenNormal, shantenChiitoi, isWin, isWinNormal,
   isSevenPairs, winShape, waitsOf, canWinTile, canTingWith, mulberry32, newRound, remaining, drawTile, visibleCounts, remainingOf,
   selfOptions, claimOptions, applyDiscard, applyPeng, applyMingang, applyAngang, applyBugang, computeScore, settleWin, settleDraw,
-  playRound, evalDiscards, threatsFor, isIsolated, AI };
+  playRound, evalDiscards, threatsFor, isIsolated, AI, LONG_NAMES, LONG_PTS, isQingyise, isYitiao, longTypes, longTypesC, scoreFor, waitBases, waitWeight, longPlan };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDD = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1218,7 +1270,13 @@ function recordingAgent(rec, inner) {
 function recordingHooks(rec, inner) { return { async event(e, st) { recEvent(rec, e, st); if (inner && inner.event) await inner.event(e, st); } }; }
 
 /* ---------------- evaluation ---------------- */
-function waitValue(waits, rem) { return waits.reduce((a, w) => { const p = G.pts(w); return a + rem[w] * (p >= 6 ? 1 : p >= 3 ? 0.5 : 0); }, 0); }
+/* 龙 bases (wb[w].base) raise the value of a wait: a 20-point 龙 counts double, 40 triple */
+const lmul = (wb, w) => (wb && wb[w] && wb[w].longs.length ? 1 + wb[w].longs.length : 1);
+function waitValue(waits, rem, wb) { return waits.reduce((a, w) => { const p = G.pts(w); return a + rem[w] * (p >= 6 ? 1 : p >= 3 ? 0.5 : 0) * lmul(wb, w); }, 0); }
+const longStr = longs => (longs || []).map(k => G.LONG_NAMES[k]).join('+');
+/* "青龙 20 + 七对龙 20 = 40" or "5万 5 点" */
+function baseStr(longs, tile) { return longs && longs.length ? longs.map(k => `${G.LONG_NAMES[k]} ${G.LONG_PTS}`).join(' + ') + (longs.length > 1 ? ` = ${G.LONG_PTS * longs.length}` : '') : `${tn(tile)} ${G.pts(tile)} 点`; }
+function bestLong(r) { if (!r || !r.wb) return null; let b = null; for (const w of r.waits) { const x = r.wb[w]; if (x.longs.length && G.pts(w) >= 3 && (!b || x.base > b.base)) b = { w, base: x.base, longs: x.longs }; } return b; }
 function winRemOf(waits, rem) { return waits.reduce((a, w) => a + (G.pts(w) >= 3 ? rem[w] : 0), 0); }
 /* full discard table for player p: shanten after discard, 进张 (counting visible tiles), waits */
 function discardTable(st, p, withEngine) {
@@ -1233,19 +1291,21 @@ function discardTable(st, p, withEngine) {
     if (s === 0) {
       r.waits = G.waitsOf(c, nm); r.legal = G.canTingWith(r.waits);
       r.uk = r.waits.reduce((a, w) => a + rem[w], 0); r.ukTiles = r.waits.slice();
-      r.wv = waitValue(r.waits, rem); r.winRem = winRemOf(r.waits, rem);
+      r.wb = G.waitBases(c, pl.melds, r.waits);
+      r.wv = waitValue(r.waits, rem, r.wb); r.winRem = winRemOf(r.waits, rem);
     } else {
       for (let y = 0; y < 34; y++) if (c[y] < 4 && rem[y] > 0) { c[y]++; if (G.shanten(c, nm) < s) { r.uk += rem[y]; r.ukTiles.push(y); } c[y]--; }
     }
     c[t]++;
-    if (eng) { r.danger = em[t].danger; r.rank = em[t].rank; }
+    if (eng) { r.danger = em[t].danger; r.rank = em[t].rank; r.plan = eng[em[t].rank].plan || null; }
     rows.push(r);
   }
   const minS = Math.min(...rows.map(r => r.s));
   return { rows, eng, rem, minS };
 }
 const worse = (a, b) => ({ good: 0, ok: 1, bad: 2 }[a] >= { good: 0, ok: 1, bad: 2 }[b] ? a : b);
-function waitsStr(r, rem) { return r.waits.map(w => `${tn(w)}${rem ? '(剩' + rem[w] + ')' : ''}`).join(' '); }
+function waitsStr(r, rem) { return r.waits.map(w => `${tn(w)}${rem ? '(剩' + rem[w] + ')' : ''}${r.wb && r.wb[w] && r.wb[w].longs.length ? '[' + longStr(r.wb[w].longs) + ']' : ''}`).join(' '); }
+const PLAN_STR = { qing: '青龙（清一色）', qidui: '七对龙' };
 
 function analyzeSelf(d) {
   const st = d.snap, o = d.o, a = d.a, pl = st.players[0];
@@ -1264,7 +1324,7 @@ function analyzeSelf(d) {
   const eng = G.AI.selfTurn(st, 0, o);
   const recTile = tb.eng[0].tile, recTing = o.tingOptions.some(x => x.tile === recTile);
   out.rec = { type: 'discard', tile: recTile, ting: recTing };
-  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, uk: r.uk, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger }));
+  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, uk: r.uk, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger, wb: r.wb || null }));
   out.rem = tb.rem;
   const K = byT[a.tile], R = byT[recTile];
   const B = tb.rows.filter(r => r.s === tb.minS).sort((x, y) => y.uk - x.uk)[0];
@@ -1272,7 +1332,7 @@ function analyzeSelf(d) {
   out.k = { tile: K.tile, s: K.s, uk: K.uk, danger: K.danger }; out.threats = threats;
   let v = 'good', type = null, msg = '', sev = 0;
   if (K.tile === R.tile) {
-    msg = K.s === 0 ? (K.legal ? `听 ${waitsStr(K, tb.rem)}，能胡的还剩 ${K.winRem} 张` : `听牌，但听口没有 6 点以上的牌`) : `${sName(K.s)}，进张 ${K.uk} 张，和推荐一致`;
+    msg = K.s === 0 ? (K.legal ? `听 ${waitsStr(K, tb.rem)}，能胡的还剩 ${K.winRem} 张` : `听牌，但听口没有 6 点以上的牌`) : `${sName(K.s)}，进张 ${K.uk} 张，和推荐一致${K.plan ? `，在做${PLAN_STR[K.plan]}` : ''}`;
   } else if (threats.length && K.danger > R.danger && K.danger >= 3) {
     v = (K.danger >= 6 && R.danger <= 2) ? 'bad' : 'ok'; type = 'danger';
     msg = `${threats.map(q => NAMES[q]).join('、')} 已报听：${tn(K.tile)} 是 6 点以上的危险牌，打 ${tn(R.tile)} 更安全`;
@@ -1292,9 +1352,14 @@ function analyzeSelf(d) {
     } else if (K.wv >= R.wv - 0.5) msg = `听 ${waitsStr(K, tb.rem)}，和推荐差不多`;
     else {
       v = K.wv >= R.wv * 0.6 ? 'ok' : 'bad'; type = 'tingChoice';
-      msg = `打 ${tn(R.tile)} 听 ${waitsStr(R, tb.rem)}，能胡 ${R.winRem} 张；你打 ${tn(K.tile)} 只有 ${K.winRem} 张`;
-      sev = 6 + (R.winRem - K.winRem) * 2;
+      const rl = bestLong(R), kl = bestLong(K);
+      msg = rl && (!kl || rl.base > kl.base) ? `打 ${tn(R.tile)} 听 ${waitsStr(R, tb.rem)}，胡 ${tn(rl.w)} 成${longStr(rl.longs)}（底分 ${rl.base}）；你打 ${tn(K.tile)} ${kl ? '只有' + longStr(kl.longs) : '没有龙'}`
+        : `打 ${tn(R.tile)} 听 ${waitsStr(R, tb.rem)}，能胡 ${R.winRem} 张；你打 ${tn(K.tile)} 只有 ${K.winRem} 张`;
+      sev = 6 + Math.max(0, (R.winRem - K.winRem) * 2) + (rl && !kl ? 6 : 0);
     }
+  } else if (R.plan && K.s === R.s) {
+    msg = `${sName(K.s)}，进张 ${K.uk} 张；推荐打 ${tn(R.tile)} 做${PLAN_STR[R.plan]}，胡了底分 ${G.LONG_PTS} 起`;
+    if (K.uk < R.uk * 0.7) { v = 'ok'; type = 'efficiency'; sev = 4; }
   } else if (K.uk >= R.uk - 1 || K.uk >= R.uk * 0.9) {
     msg = K.uk >= R.uk ? `${sName(K.s)}，进张 ${K.uk} 张，很好` : `进张 ${K.uk} 张，和推荐（打 ${tn(R.tile)} 进张 ${R.uk}）相当`;
   } else {
@@ -1314,7 +1379,8 @@ function analyzeSelf(d) {
       const bt = tb.rows.filter(r => r.s === 0 && r.legal).sort((x, y) => y.wv - x.wv)[0];
       if (bt && bt.tile !== K.tile && bt.wv - K.wv >= 2) {
         v = worse(v, 'ok'); if (!type) type = 'tingChoice';
-        msg = `改打 ${tn(bt.tile)} 报听更好：听 ${waitsStr(bt, tb.rem)}，能胡 ${bt.winRem} 张；你的听口只有 ${K.winRem} 张`; sev = Math.max(sev, 6 + bt.winRem - K.winRem);
+        const bl = bestLong(bt), kl = bestLong(K);
+        msg = `改打 ${tn(bt.tile)} 报听更好：听 ${waitsStr(bt, tb.rem)}，能胡 ${bt.winRem} 张${bl && (!kl || bl.base > kl.base) ? `，还能成${longStr(bl.longs)}（底分 ${bl.base}）` : ''}；你的听口只有 ${K.winRem} 张`; sev = Math.max(sev, 6 + bt.winRem - K.winRem);
       } else if (v === 'good') msg = `报听！听 ${waitsStr(K, tb.rem)}，能胡的还剩 ${K.winRem} 张`;
     }
   }
@@ -1387,9 +1453,11 @@ function resultLine(rec) {
   const r = rec.result; if (!r) return '结果: 未完成';
   if (r.type === 'draw') return '结果: 流局（牌墙摸完）';
   const w = NAMES[r.winner];
-  const calc = `${r.base}点${r.zimo ? '×2(自摸)' : ''}${r.angang ? `×${Math.pow(2, r.angang)}(暗杠${r.angang})` : ''}=${r.score}分`;
-  if (r.zimo) return `结果: ${w} 自摸 ${tn(r.tile)}${r.shape === 'qidui' ? '（七对）' : ''}，${calc}，三家各付 ${r.score}`;
-  return `结果: ${NAMES[r.from]} 点炮 ${tn(r.tile)} → ${w} 胡${r.shape === 'qidui' ? '（七对）' : ''}，${calc}，${r.mode === 'baohu' ? `${NAMES[r.from]} 未报听，包胡付 ${r.score * 3}` : `${NAMES[r.from]} 已报听，三家各付 ${r.score}`}`;
+  const lg = r.longs && r.longs.length ? r.longs.map(k => `${G.LONG_NAMES[k]}${G.LONG_PTS}`).join('+') + (r.longs.length > 1 ? `=${r.base}` : '') : `${r.base}点`;
+  const calc = `${lg}${r.zimo ? '×2(自摸)' : ''}${r.angang ? `×${Math.pow(2, r.angang)}(暗杠${r.angang})` : ''}=${r.score}分`;
+  const sh = r.longs && r.longs.length ? `（${longStr(r.longs)}）` : r.shape === 'qidui' ? '（七对）' : '';
+  if (r.zimo) return `结果: ${w} 自摸 ${tn(r.tile)}${sh}，${calc}，三家各付 ${r.score}`;
+  return `结果: ${NAMES[r.from]} 点炮 ${tn(r.tile)} → ${w} 胡${sh}，${calc}，${r.mode === 'baohu' ? `${NAMES[r.from]} 未报听，包胡付 ${r.score * 3}` : `${NAMES[r.from]} 已报听，三家各付 ${r.score}`}`;
 }
 function exportText(rec, an) {
   an = an || analyzeRecord(rec);
@@ -1397,7 +1465,7 @@ function exportText(rec, an) {
   const L = [];
   const d = new Date(rec.ts), pad = n => String(n).padStart(2, '0');
   L.push(`【山西扣点点 对局记录】第${rec.roundNo}局 ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`);
-  L.push('规则: 136张无花; 可碰杠不可吃; 必须报听才能胡, 报听后手牌锁定; 报听需听口含6点以上; 牌点=数字, 字牌10; 1-2点不能胡, 3-5点只能自摸, 6点以上可自摸可点炮; 得分=胡牌点数×2(自摸)×2^暗杠数; 自摸三家各付; 未报听者点炮包胡(付3份), 已报听者点炮三家各付; 无耗子无庄分');
+  L.push('规则: 136张无花; 可碰杠不可吃; 必须报听才能胡, 报听后手牌锁定; 报听需听口含6点以上; 牌点=数字, 字牌10; 1-2点不能胡, 3-5点只能自摸, 6点以上可自摸可点炮; 龙: 青龙(清一色,含副露全是一门数牌)/七对龙(七对,只能门清,四张算两对)/一条龙(门清顺子123456789同一门) 每种底分20可叠加(七对龙与一条龙互斥), 有龙时底分代替胡牌点数, 但能否胡仍看胡的那张牌的点数; 得分=底分(无龙时为胡牌点数)×2(自摸)×2^暗杠数; 自摸三家各付; 未报听者点炮包胡(付3份), 已报听者点炮三家各付; 无耗子无庄分');
   L.push('座位: ' + [0, 1, 2, 3].map(i => `${NAMES[i]}(${WINDS[(i - rec.dealer + 4) % 4]}${i === rec.dealer ? '/庄' : ''})`).join(' ') + ' | 开局分: ' + [0, 1, 2, 3].map(i => `${NAMES[i]} ${rec.scores0[i]}`).join(' '));
   L.push(`Kevin配牌: [${groupStr(rec.hands0[0])}]`);
   L.push('--- 过程（Kevin 每手附引擎推荐与评价）---');
@@ -1546,13 +1614,14 @@ async function genTingpai(rng) {
       waits, answer: { waits: best.w.slice(), canTing: G.canTingWith(best.w) } };
   });
 }
-function tingRows(hand, nm, rem) {
+function tingRows(hand, nm, rem, melds) {
   const c = G.counts(hand), rows = [];
   for (let t = 0; t < 34; t++) if (c[t]) {
     c[t]--; const w = G.waitsOf(c, nm); c[t]++;
     if (!G.canTingWith(w)) continue;
-    rows.push({ tile: t, waits: w.map(x => ({ t: x, pts: G.pts(x), rem: rem[x], cls: waitClass(x) })), wv: waitValue(w, rem), winRem: winRemOf(w, rem),
-      exp: w.reduce((a, x) => a + (G.pts(x) >= 3 ? rem[x] * G.pts(x) * (G.pts(x) >= 6 ? 1 : 0.5) : 0), 0) });
+    c[t]--; const wb = G.waitBases(c, melds || [], w); c[t]++;
+    rows.push({ tile: t, waits: w.map(x => ({ t: x, pts: G.pts(x), rem: rem[x], cls: waitClass(x), base: wb[x].base, longs: wb[x].longs })), wv: waitValue(w, rem, wb), winRem: winRemOf(w, rem),
+      exp: w.reduce((a, x) => a + (G.pts(x) >= 3 ? rem[x] * wb[x].base * (G.pts(x) >= 6 ? 1 : 0.5) : 0), 0) });
   }
   return rows;
 }
@@ -1565,7 +1634,7 @@ async function genBaoting(rng) {
     const me = s.players[0];
     if (me.ting || o.tingOptions.length < 2) return null;
     const seen = seenOf(s), rem = remFromSeen(me.hand, seen);
-    const rows = tingRows(me.hand, me.melds.length, rem);
+    const rows = tingRows(me.hand, me.melds.length, rem, me.melds);
     const keys = new Set(rows.map(r => r.wv + ':' + r.exp));
     if (rows.length < 2 || keys.size < 2) return null;
     const ans = bestTing(rows);
@@ -1626,11 +1695,11 @@ async function genFangshou(rng) {
 }
 function payFor(sc) {
   const pay = [0, 0, 0, 0], w = sc.winner;
-  const score = G.pts(sc.tile) * (sc.zimo ? 2 : 1) * Math.pow(2, sc.angang);
+  const sf = G.scoreFor(sc.hand, sc.melds || [], sc.tile, sc.zimo), score = sf.score;
   if (sc.zimo || sc.fromTing) { for (let i = 0; i < 4; i++) if (i !== w) pay[i] = -score; }
   else pay[sc.from] = -3 * score;
   pay[w] = -pay.reduce((a, b) => a + b, 0);
-  return { score, pay };
+  return { score, pay, base: sf.base, longs: sf.longs };
 }
 function payVec(w, from, mode, score) {
   const pay = [0, 0, 0, 0];
@@ -1638,28 +1707,66 @@ function payVec(w, from, mode, score) {
   else pay[from] = -score;
   pay[w] = -pay.reduce((a, b) => a + b, 0); return pay;
 }
+/* synthetic concealed 龙 hand (14 tiles) for 算分 drills; returns sorted tiles or null */
+function synthLong(rng) {
+  const R = n => Math.floor(rng() * n), suit = R(3) * 9, kind = R(5);
+  const qing = kind === 1 || kind === 3 || kind === 4;
+  const pool = qing ? [...Array(9)].map((_, i) => suit + i) : [...Array(34).keys()];
+  const h = [];
+  const pick = () => pool[R(pool.length)];
+  if (kind <= 1) {                                   // 七对龙 (maybe 清一色), sometimes with a quad
+    const ks = new Set(); while (ks.size < 7) ks.add(pick());
+    const arr = [...ks]; if (rng() < 0.3) arr[6] = arr[0];
+    arr.forEach(t => h.push(t, t));
+  } else {
+    if (kind === 2 || kind === 3) for (let i = 0; i < 9; i++) h.push(suit + i);      // 一条龙
+    while (h.length < 12) {
+      if (rng() < 0.5) { const t = pick(); h.push(t, t, t); }
+      else { const st0 = qing ? suit + R(7) : R(3) * 9 + R(7); h.push(st0, st0 + 1, st0 + 2); }
+    }
+    const p = pick(); h.push(p, p);
+  }
+  const c = G.counts(h); if (c.some(x => x > 4)) return null;
+  if (!G.longTypes(h, []).length) return null;
+  return sorted(h);
+}
 async function genSuanfen(rng) {
   for (let tries = 0; tries < 30; tries++) {
     const st = G.newRound({ dealer: Math.floor(rng() * 4), rng });
     await G.playRound(st, [G.AI, G.AI, G.AI, G.AI], yieldHooks());
     const r = st.result; if (r.type !== 'win') continue;
-    const pl = st.players[r.winner];
-    let hand = r.hand.slice(), melds = r.melds.map(m => ({ type: m.type, tile: m.tile }));
+    let hand = r.hand.slice(), melds = r.melds.map(m => ({ type: m.type, tile: m.tile })), tile = r.tile, zimo = r.zimo;
+    // ~45% of drills: replace the winning hand with a synthetic 龙 hand (same winner / seats / payment situation)
+    if (!G.longTypes(hand, melds).length && rng() < 0.45) {
+      const sh = synthLong(rng); if (!sh) continue;
+      const ok = sh.filter(t => G.pts(t) >= (zimo ? 3 : 6));
+      if (!ok.length) continue;
+      hand = sh; melds = []; tile = ok[Math.floor(rng() * ok.length)];
+    }
     // sometimes turn a concealed triplet into a 暗杠 (still a winning shape) to practise ×2
     if (!melds.some(m => m.type === 'angang') && rng() < 0.45) {
-      const c = G.counts(hand); const rest = hand.slice(); rest.splice(rest.indexOf(r.tile), 1);
+      const c = G.counts(hand); const rest = hand.slice(); rest.splice(rest.indexOf(tile), 1);
       const cr = G.counts(rest);
-      for (let t = 0; t < 34; t++) if (cr[t] === 3 && t !== r.tile) {
+      for (let t = 0; t < 34; t++) if (cr[t] === 3 && t !== tile) {
         const c2 = c.slice(); c2[t] -= 3;
         if (G.isWinNormal(c2)) { hand = hand.filter(x => x !== t); melds.push({ type: 'angang', tile: t }); break; }
       }
     }
-    if (!r.zimo && st.players[r.from].ting === undefined) continue;
-    const sc = { winner: r.winner, tile: r.tile, zimo: r.zimo, from: r.zimo ? null : r.from, fromTing: r.zimo ? null : r.fromTing, angang: melds.filter(m => m.type === 'angang').length, hand: sorted(hand), melds, dealer: st.dealer };
-    const { score, pay } = payFor(sc);
-    const base = G.pts(sc.tile), ag = Math.pow(2, sc.angang);
+    if (!zimo && st.players[r.from].ting === undefined) continue;
+    const sc = { winner: r.winner, tile, zimo, from: zimo ? null : r.from, fromTing: zimo ? null : r.fromTing, angang: melds.filter(m => m.type === 'angang').length, hand: sorted(hand), melds, dealer: st.dealer };
+    const { score, pay, base, longs } = payFor(sc);
+    sc.longs = longs;
+    const ag = Math.pow(2, sc.angang), mult = (zimo ? 2 : 1) * ag, tp = G.pts(tile);
     const wrongs = [];
     const add = p => { if (!wrongs.some(x => x.join() === p.join()) && p.join() !== pay.join() && p.some(x => x)) wrongs.push(p); };
+    const vec = sc2 => zimo || sc.fromTing ? payVec(sc.winner, null, 'each', sc2) : payVec(sc.winner, sc.from, 'one', sc2 * 3);
+    if (longs.length) {
+      add(vec(tp * mult));                                        // 忘了龙，用胡牌点数
+      if (longs.length > 1) add(vec(G.LONG_PTS * mult));          // 只算了一种龙
+      else add(vec(G.LONG_PTS * 2 * mult));                       // 多算了一种龙
+      add(vec((base + tp) * mult));                               // 龙分 + 牌点 叠加了
+    }
+    const lw = wrongs.length;
     if (sc.zimo) {
       add(payVec(sc.winner, null, 'each', base * ag));          // 忘了自摸 ×2
       add(payVec(sc.winner, null, 'each', base * 2));           // 忘了暗杠
@@ -1676,15 +1783,17 @@ async function genSuanfen(rng) {
       add(payVec(sc.winner, sc.from, 'one', score * 6));        // 多乘了自摸
       add(payVec(sc.winner, sc.from, 'one', base * 3));
     }
-    const choices = [pay].concat(wrongs.slice(0, 3));
+    // keep a couple of 龙 mistakes among the 3 wrong options
+    const pickW = lw ? wrongs.slice(0, Math.min(2, lw)).concat(wrongs.slice(lw)).concat(wrongs.slice(2, lw)) : wrongs;
+    const choices = [pay].concat(pickW.slice(0, 3));
     for (let i = choices.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [choices[i], choices[j]] = [choices[j], choices[i]]; }
     const answer = choices.findIndex(p => p.join() === pay.join());
-    const steps = [`胡 ${tn(sc.tile)} = ${base} 点`];
+    const steps = [longs.length ? `${baseStr(longs, tile)}（有龙，不算 ${tn(tile)} 的 ${tp} 点）` : `胡 ${tn(tile)} = ${base} 点`];
     if (sc.zimo) steps.push('自摸 ×2');
     if (sc.angang) steps.push(`暗杠 ${sc.angang} 个 ×${ag}`);
     steps.push(`= ${score} 分`);
     const rule = sc.zimo ? `自摸：三家各付 ${score}，${NAMES[sc.winner]} 共得 ${score * 3}` : sc.fromTing ? `${NAMES[sc.from]} 已报听点炮：三家分摊，每家各付 ${score}` : `${NAMES[sc.from]} 没报听就点炮：包胡，一人付 ${score}×3 = ${score * 3}`;
-    return { id: mkId('suanfen', rng), type: 'suanfen', sc, choices, answer, score, explain: steps.join(' ') + '；' + rule };
+    return { id: mkId('suanfen', rng), type: 'suanfen', sc, choices, answer, score, base, longs, explain: steps.join(' ') + '；' + rule };
   }
   return null;
 }
@@ -1700,7 +1809,7 @@ function checkAnswer(q, ans) {
   return { correct: q.answer.includes(ans) };
 }
 
-const api = { cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, analyzeRecord,
+const api = { synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, analyzeRecord,
   exportText, handStats, aggregate, genQuestion, checkAnswer, safetyTier, remFromSeen, payFor, tingRows, bestTing, waitClass, simCapture, setYield, seenOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDDT = api;
@@ -1909,10 +2018,11 @@ function plateHTML(i) {
     `<div class="ps ${sc < 0 ? 'neg' : ''}"><i class="coin"></i>${sc}${i ? `<span class="cnt">${pl.hand.length}张</span>` : ''}</div></div></div>`;
 }
 function waitNote(w) { const p = G.pts(w); return p < 3 ? 'no' : p < 6 ? 'zm' : ''; }
-function waitLabel(w, rem) {
-  const p = G.pts(w), cls = waitNote(w);
+const longNames = L => L.map(k => G.LONG_NAMES[k]).join('+');
+function waitLabel(w, rem, wb) {
+  const p = G.pts(w), cls = waitNote(w), lg = wb && wb[w] && wb[w].longs.length ? wb[w] : null;
   const note = p < 3 ? '·不能胡' : p < 6 ? '·只能自摸' : '';
-  return `<span class="wt ${cls}">${G.tname(w)}(${p}点${note}${rem ? `·剩${rem[w]}` : ''})</span>`;
+  return `<span class="wt ${cls}${lg ? ' lg' : ''}">${G.tname(w)}(${lg ? `${longNames(lg.longs)} ${lg.base}分` : p + '点'}${note}${rem ? `·剩${rem[w]}` : ''})</span>`;
 }
 
 /* ---------------- rendering ---------------- */
@@ -2039,15 +2149,17 @@ function renderMe() {
   const tp = $('tingpanel');
   if (tingMode && selfTurn && !me.ting) {
     const opts = pending.o.tingOptions;
-    const val = x => x.waits.reduce((a, w) => a + visRem[w] * (G.pts(w) >= 6 ? 1 : G.pts(w) >= 3 ? 0.5 : 0), 0);
+    const mc = G.counts(me.hand), wbOf = x => { if (!x.wb) { mc[x.tile]--; x.wb = G.waitBases(mc, me.melds, x.waits); mc[x.tile]++; } return x.wb; };
+    const val = x => x.waits.reduce((a, w) => a + visRem[w] * (G.pts(w) >= 6 ? 1 : G.pts(w) >= 3 ? 0.5 : 0) * (1 + wbOf(x)[w].longs.length), 0);
+    const topScore = x => Math.max(...x.waits.filter(w => G.pts(w) >= 3).map(w => wbOf(x)[w].base), 0);
     const best = opts.reduce((b, x) => (val(x) > val(b) ? x : b), opts[0]);
     tp.className = 'on';
     const canWin = x => x.waits.reduce((a, w) => a + (G.pts(w) >= 3 ? visRem[w] : 0), 0);
     tp.innerHTML = `<div class="th"><span class="tt">报听</span><span class="ts">点一个方案 = 打出并报听<br><small>报听后只能摸什么打什么</small></span><button class="x" data-close="1" aria-label="取消">✕</button></div><div class="topts">` +
       opts.map(x => `<div class="topt ${sel && sel.t === x.tile ? 'sel' : ''} ${x === best && opts.length > 1 ? 'best' : ''}" data-ting="${x.tile}" role="button">${x === best && opts.length > 1 ? '<span class="rec">推荐</span>' : ''}` +
         `<div class="tdis"><span class="tl">打</span>${tileHTML(x.tile, '', '', 'style="--w:30px;--h:41px;border-radius:5px"')}</div><span class="arrow">听</span><div class="ws">` +
-        x.waits.map(w => { const p = G.pts(w), c = waitNote(w); return `<div class="wcell ${c}">${tileHTML(w, '', '', 'style="--w:24px;--h:33px;border-radius:4px"')}<span class="wp"><b>${p}</b>点</span><span class="wk">${c === 'no' ? '不能胡' : c === 'zm' ? '只自摸' : '可点炮'}</span><span class="wr">剩 ${visRem[w]}</span></div>`; }).join('') +
-        `</div><div class="tsum">能胡<b>${canWin(x)}</b>张</div></div>`).join('') + `</div>`;
+        x.waits.map(w => { const p = G.pts(w), c = waitNote(w), lg = c === 'no' ? { longs: [], base: p } : wbOf(x)[w]; return `<div class="wcell ${c}${lg.longs.length ? ' long' : ''}">${lg.longs.length ? `<span class="wl">${lg.longs.map(k => G.LONG_NAMES[k].replace('龙', '')).join('+')}龙</span>` : ''}${tileHTML(w, '', '', 'style="--w:24px;--h:33px;border-radius:4px"')}<span class="wp"><b>${lg.base}</b>${lg.longs.length ? '分' : '点'}</span><span class="wk">${c === 'no' ? '不能胡' : c === 'zm' ? '只自摸' : '可点炮'}</span><span class="wr">剩 ${visRem[w]}</span></div>`; }).join('') +
+        `</div><div class="tsum">能胡<b>${canWin(x)}</b>张${topScore(x) ? `<span class="tmax">底分最高 ${topScore(x)}</span>` : ''}</div></div>`).join('') + `</div>`;
   } else { tp.className = ''; tp.innerHTML = ''; }
 }
 
@@ -2072,8 +2184,11 @@ function computeHint(rem) {
     const o = pending.o;
     if (o.ting) return o.hu ? { rec: null, short: `摸到 ${G.tname(me.drawn)}，可以自摸！`, text: '' } : { rec: null, short: '', text: '' };
     const ev = G.evalDiscards(st, 0), b = ev[0], name = G.tname(b.tile);
-    if (b.s === 0 && b.legal && o.tingOptions.some(x => x.tile === b.tile))
-      return { rec: b.tile, short: `打 <b>${name}</b> 可报听`, text: `打 <b>${name}</b> 后点「听」报听：听 ${ws(b.waits)}` };
+    if (b.s === 0 && b.legal && o.tingOptions.some(x => x.tile === b.tile)) {
+      const lw = b.waits.filter(w => b.wb && b.wb[w].longs.length && G.pts(w) >= 3);
+      const lt = lw.length ? `；胡 ${lw.map(w => G.tname(w)).join('/')} 成<b>${longNames(b.wb[lw[0]].longs)}</b>，底分 ${b.wb[lw[0]].base}（代替牌点）` : '';
+      return { rec: b.tile, short: `打 <b>${name}</b> 可报听${lw.length ? ' · 有龙' : ''}`, text: `打 <b>${name}</b> 后点「听」报听：听 ${b.waits.map(w => waitLabel(w, rem, b.wb)).join(' ')}${lt}` };
+    }
     const threats = G.threatsFor(st, 0);
     const off = ev.slice().sort((x, y) => (-y.s * 100 + y.val + y.bias) - (-x.s * 100 + x.val + x.bias))[0];
     if (threats.length && off.tile !== b.tile) {
@@ -2082,7 +2197,9 @@ function computeHint(rem) {
     }
     const tp = G.pts(b.tile);
     let short, reason;
-    if (b.isolated && b.tile >= 27) { short = '孤张字牌'; reason = '孤张字牌很难成型'; }
+    if (b.plan === 'qing') { short = '做青龙'; reason = `手里几乎都是同一门，打掉杂牌做清一色（青龙），胡了底分 ${G.LONG_PTS} 起，不看胡牌点数`; }
+    else if (b.plan === 'qidui') { short = '做七对龙'; reason = `已经有 5 对以上，留对子打单张做七对（七对龙），胡了底分 ${G.LONG_PTS} 起`; }
+    else if (b.isolated && b.tile >= 27) { short = '孤张字牌'; reason = '孤张字牌很难成型'; }
     else if (b.isolated) { short = '孤张'; reason = '孤张，周围没有能连的牌'; }
     else if (tp <= 2) { short = '点数太小'; reason = '1–2 点的牌做听口不能胡，价值低'; }
     else { short = '进张最多'; reason = '打它留下的进张最多'; }
@@ -2279,9 +2396,10 @@ function showModal(html) { $('modalbox').innerHTML = html; $('modal').classList.
 function hideModal() { $('modal').classList.add('hidden'); }
 function showRules() {
   showModal(`<button class="mclose" id="closeRules" aria-label="关闭">✕</button><div class="mhead"><div class="mtitle" style="font-size:30px">扣点点 规则</div></div><div class="rules">
-  <h3>牌与动作</h3><ul><li>136 张：万、筒、条 1–9 各 4 张，东南西北中發白各 4 张，没有花牌。</li><li>可以碰、杠（明杠 / 暗杠 / 补杠），<b>不能吃</b>；杠后从牌墙尾补一张。</li><li>胡牌：4 组顺子/刻子 + 1 对将，或七对。</li></ul>
+  <h3>牌与动作</h3><ul><li>136 张：万、筒、条 1–9 各 4 张，东南西北中發白各 4 张，没有花牌。</li><li>可以碰、杠（明杠 / 暗杠 / 补杠），<b>不能吃</b>；杠后从牌墙尾补一张。</li><li>胡牌：4 组顺子/刻子 + 1 对将，或七对（四张一样的算两对）。</li></ul>
   <h3>报听与点数</h3><ul><li><b>必须报听才能胡</b>；报听后手牌锁定，只能打出摸到的牌。</li><li>数字牌按面值算点，字牌 10 点；听口里要有 6 点以上的牌才能报听。</li><li>1–2 点不能胡；3–5 点只能自摸；6 点以上自摸、点炮都能胡。</li></ul>
-  <h3>算分</h3><ul><li>得分 = 胡的那张牌的点数；自摸 ×2；每个暗杠再 ×2。</li><li>自摸：三家各付一份。点炮：没报听的人点炮 → 一个人包三家；已报听的人点炮 → 三家各付一份。</li><li>不带耗子、不带庄分；牌墙摸完没人胡算流局，庄家没胡就轮庄。</li></ul>
+  <h3>算分</h3><ul><li>得分 = 底分（没有龙时 = 胡的那张牌的点数；有龙时 = 每种龙 20）；自摸 ×2；每个暗杠再 ×2。</li><li>自摸：三家各付一份。点炮：没报听的人点炮 → 一个人包三家；已报听的人点炮 → 三家各付一份。</li><li>不带耗子、不带庄分；牌墙摸完没人胡算流局，庄家没胡就轮庄。</li></ul>
+  <h3>龙（加分牌型）</h3><ul><li><b>青龙</b>：清一色，整手牌连副露都是同一门数字牌，没有字牌，什么牌型都行。</li><li><b>七对龙</b>：七对胡牌，只能门清；四张一样的算两对。</li><li><b>一条龙</b>：普通牌型里有同一门的 123、456、789 三组顺子（门清，不能吃）。</li><li>每种龙底分 <b>20</b>，可以叠加：青龙 + 七对龙 = 40，青龙 + 一条龙 = 40（七对龙和一条龙不会同时出现）。有龙时<b>底分代替胡牌那张的点数</b>，再算自摸 ×2、暗杠 ×2。</li><li>注意：<b>能不能胡仍然看胡的那张牌</b>——要报听、听口要有 6 点以上才能报听；胡 1–2 点的牌不能胡，3–5 点只能自摸，6 点以上才能点炮胡，有龙也一样。</li><li>例：青龙 20 + 七对龙 20 = 40 × 自摸 2 = 80 分，三家各付 80。</li></ul>
   <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li></ul></div>
   <div class="mfoot"><button class="gbtn" id="closeRules2">知道了</button></div>`);
   $('closeRules').onclick = hideModal; $('closeRules2').onclick = hideModal;
@@ -2298,18 +2416,20 @@ function showResult(r, rec, an) {
   } else {
     const w = NAMES[r.winner], mine = r.winner === 0;
     const title = mine ? (r.zimo ? '自摸！' : '胡了！') : `${w}${r.zimo ? '自摸' : '胡牌'}`;
-    const sub = r.zimo ? `${w} 自摸 ${G.tname(r.tile)}${r.shape === 'qidui' ? ' · 七对' : ''}` : `${NAMES[r.from]} 点炮 ${G.tname(r.tile)} → ${w} 胡${r.shape === 'qidui' ? ' · 七对' : ''}`;
+    const L = r.longs || [], lsub = L.length ? ' · ' + L.map(k => G.LONG_NAMES[k]).join(' · ') : r.shape === 'qidui' ? ' · 七对' : '';
+    const sub = r.zimo ? `${w} 自摸 ${G.tname(r.tile)}${lsub}` : `${NAMES[r.from]} 点炮 ${G.tname(r.tile)} → ${w} 胡${lsub}`;
     const rest = r.hand.slice(); rest.splice(rest.indexOf(r.tile), 1);
     const melds = r.melds.map(m => meldHTML(m, 'md', true)).join('');
     const handH = `${melds}${melds ? '<span class="gap"></span>' : ''}${rest.map(t => tileHTML(t, 'md')).join('')}<span class="gap"></span><div class="wtile"><span class="tag">${r.zimo ? '自摸' : '胡'}</span>${tileHTML(r.tile, 'md')}</div>`;
-    let eq = `<span class="term">${tileHTML(r.tile, '')} ${r.base} 点</span>`;
+    let eq = L.length ? L.map(k => `<span class="term long">${G.LONG_NAMES[k]} ${G.LONG_PTS}</span>`).join('<span class="op">+</span>') + (L.length > 1 ? `<span class="op">=</span><span class="term">底分 ${r.base}</span>` : '')
+      : `<span class="term">${tileHTML(r.tile, '')} ${r.base} 点</span>`;
     if (r.zimo) eq += `<span class="op">×</span><span class="term">自摸 ×2</span>`;
     if (r.angang) eq += `<span class="op">×</span><span class="term">暗杠${r.angang > 1 ? ' ' + r.angang + ' 个' : ''} ×${Math.pow(2, r.angang)}</span>`;
     eq += `<span class="op">=</span><span class="term total">${r.score} 分</span>`;
     const rule = r.mode === 'zimo' ? `自摸：三家各付 ${r.score} 分，${w} 共得 ${r.score * 3} 分`
       : r.mode === 'baohu' ? `${NAMES[r.from]} 没报听就点炮 → 包胡：一人付三家 ${r.score}×3 = ${r.score * 3} 分`
       : `${NAMES[r.from]} 已报听点炮 → 三家分摊：每家各付 ${r.score} 分`;
-    html = `<div class="mhead ${mine ? 'win' : ''}"><div class="mtitle ${mine ? '' : 'lose'}">${title}</div><div class="msub">${sub}</div></div>` +
+    html = `<div class="mhead ${mine ? 'win' : ''}">${L.length ? `<div class="lbadges">${L.map(k => `<span class="lbadge">${G.LONG_NAMES[k]}</span>`).join('')}</div>` : ''}<div class="mtitle ${mine ? '' : 'lose'}">${title}</div><div class="msub">${sub}</div></div>` +
       `<div class="mhand">${handH}</div><div class="eq">${eq}</div><div class="payrule">${rule}</div>${paysHTML(r)}`;
   }
   const TU = window.KDDTrainUI;
@@ -2595,13 +2715,13 @@ function renderDrill() {
     if (done) { opt.marks = {}; q.answer.forEach(t => { opt.marks[t] = 'ans'; }); if (!s.res.correct) opt.marks[s.ans] = 'wrong'; }
     hand = handRow(q.hand, q.drawn, opt);
     const card = r => `<div class="bto ${done ? (q.answer.includes(r.tile) ? 'best' : r.tile === s.ans ? 'mine' : '') : (s.selT === r.tile ? 'on' : '')}" ${done ? '' : `data-act="pick" data-t="${r.tile}" data-k="-1"`}>` +
-      `<div class="bh"><span class="bd">打</span>${tl(r.tile, 'tm')}<span class="ba">听</span><span class="bw">${r.waits.map(w => `<span class="bwi ${w.cls}">${tl(w.t, 'tp')}<small><b>${w.pts}</b>点 · 剩${w.rem}${w.cls === 'zimo' ? '<br>只自摸' : w.cls === 'no' ? '<br>不能胡' : ''}</small></span>`).join('')}</span>` +
+      `<div class="bh"><span class="bd">打</span>${tl(r.tile, 'tm')}<span class="ba">听</span><span class="bw">${r.waits.map(w => `<span class="bwi ${w.cls}">${tl(w.t, 'tp')}<small>${w.longs && w.longs.length ? `<em class="lgt">${w.longs.map(k => G.LONG_NAMES[k]).join('+')}</em><b>${w.base}</b>分` : `<b>${w.pts}</b>点`} · 剩${w.rem}${w.cls === 'zimo' ? '<br>只自摸' : w.cls === 'no' ? '<br>不能胡' : ''}</small></span>`).join('')}</span>` +
       `${done ? `<span class="bv">有效<b>${r.wv}</b></span>` : ''}</div></div>`;
     let why = '';
     if (done) {
       const b = by[q.answer[0]], m = by[s.ans];
-      why = s.res.correct ? `打 ${tn(b.tile)}：有效 ${b.wv} 张` : (m.wv === b.wv ? `有效张数一样（${b.wv} 张），但打 ${tn(b.tile)} 听的牌点数更高，胡了得分更多` : `打 ${tn(b.tile)} 有效 ${b.wv} 张，你打 ${tn(m.tile)} 只有 ${m.wv} 张`);
-      why = `<div class="ex">${why}</div><div class="ex small">有效张数：能点炮胡的牌算 1 张，只能自摸的算半张</div>`;
+      why = s.res.correct ? `打 ${tn(b.tile)}：有效 ${b.wv} 张` : (m.wv === b.wv ? `有效张数一样（${b.wv} 张），但打 ${tn(b.tile)} 听的牌底分更高${b.waits.some(w => w.longs && w.longs.length) ? '（有龙）' : ''}，胡了得分更多` : `打 ${tn(b.tile)} 有效 ${b.wv} 张，你打 ${tn(m.tile)} 只有 ${m.wv} 张`);
+      why = `<div class="ex">${why}</div><div class="ex small">有效张数：能点炮胡的牌算 1 张，只能自摸的算半张；胡了能成龙的牌按龙数加倍（1 种龙 ×2，2 种 ×3）</div>`;
     }
     const ordered = done ? q.rows.slice().sort((x, y) => (q.answer.includes(y.tile) - q.answer.includes(x.tile)) || ((y.tile === s.ans) - (x.tile === s.ans))) : q.rows;
     side = (done ? fb(s.res.correct, `最好：打 ${q.answer.map(tn).join(' / ')}`) + why : '<div class="ins">点下面的方案（或手牌里带「可听」的牌），再按「确定」</div>') +
@@ -2626,12 +2746,12 @@ function renderDrill() {
     prompt = `算一算：这局<b>每家各付多少分</b>？`;
     const rest = sc.hand.slice(); rest.splice(rest.indexOf(sc.tile), 1);
     const how = sc.zimo ? '<span class="tag z">自摸</span>' : `<span class="tag">${NAMES[sc.from]} 点炮</span><span class="tag ${sc.fromTing ? 't' : 'n'}">${NAMES[sc.from]} ${sc.fromTing ? '已报听' : '没报听'}</span>`;
-    board = `<div class="sit"><div class="sw">${w} 胡了 ${tl(sc.tile, 'tl2', 'ans')}<span class="pts">${G.pts(sc.tile)} 点</span></div><div class="stags">${how}<span class="tag">暗杠 ${sc.angang} 个</span></div>` +
+    board = `<div class="sit"><div class="sw">${w} 胡了 ${tl(sc.tile, 'tl2', 'ans')}<span class="pts">${G.pts(sc.tile)} 点</span></div><div class="stags">${how}<span class="tag">暗杠 ${sc.angang} 个</span>${done && q.longs && q.longs.length ? `<span class="tag lg">${q.longs.map(k => G.LONG_NAMES[k]).join(' + ')}</span>` : ''}</div>` +
       `<div class="shand">${sc.melds.map(m => meldGroup(m, 'tm')).join('')}<span class="hts">${rest.map(t => tl(t, 'tm')).join('')}</span><span class="wt">${tl(sc.tile, 'tm', 'ans')}</span></div>` +
       `<div class="sseats">${[0, 1, 2, 3].map(i => `<span class="${i === sc.winner ? 'win' : ''} ${i === sc.from ? 'from' : ''}">${NAMES[i]}${i === sc.winner ? ' · 胡' : i === sc.from ? ' · 点炮' : ''}</span>`).join('')}</div></div>`;
     hand = '';
     cls += ' nohand';
-    side = (done ? fb(s.res.correct) : '<div class="ins">选出正确的付分（＋得分 / −付分）</div>') +
+    side = (done ? fb(s.res.correct) : '<div class="ins">选出正确的付分（＋得分 / −付分）<br><small>先看手牌有没有龙（青龙 / 七对龙 / 一条龙）</small></div>') +
       `<div class="chs">${q.choices.map((p, i) => `<button class="ch ${done ? (i === q.answer ? 'best' : i === s.ans ? 'mine' : 'dim') : ''}" ${done ? '' : `data-act="sf" data-i="${i}"`}>${p.map((v, j) => `<span><i>${NAMES[j]}</i><b class="${vcls(v)}">${sgn(v)}</b></span>`).join('')}</button>`).join('')}</div>` +
       (done ? `<div class="ex">${esc(q.explain)}</div>` + nextBtn() : '');
   }
