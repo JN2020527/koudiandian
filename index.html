@@ -45,6 +45,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .ibtn svg{width:18px;height:18px}
 .ibtn.on{border-color:var(--gold);color:#3b2a00;background:radial-gradient(circle at 35% 30%,#ffe9a0,#e7b23c)}
 .ibtn:active{transform:scale(.92)}
+.toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);background:rgba(0,0,0,.78);color:#ffe9a8;border:1px solid rgba(255,215,105,.45);padding:8px 16px;border-radius:18px;font-size:15px;z-index:60;pointer-events:none;white-space:nowrap}
 #fsBtn{display:none}
 @media (pointer:coarse){#fsBtn.supported{display:flex}}
 /* ---------- player plates ---------- */
@@ -699,6 +700,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 @keyframes rot{0%,20%{transform:rotate(0)}55%,80%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
 @media (orientation:portrait) and (max-width:640px){#rotate{display:flex}#app,#modal,#fx,#train{visibility:hidden}}
 .act.pass.two{font-size:15px;white-space:nowrap;letter-spacing:0}
+@media (max-height:500px) and (max-width:720px){#hudR{gap:3px}#hudR .ibtn{width:25px;height:25px}#hudR .ibtn svg{width:14px;height:14px}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 <script>
@@ -756,6 +758,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
    <button class="ibtn" id="menuBtn" title="菜单 / 训练" aria-label="菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg></button>
    <button class="ibtn" id="hintToggle" title="提示" aria-label="提示"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg></button>
    <button class="ibtn" id="soundBtn" title="音效" aria-label="音效"></button>
+   <button class="ibtn" id="voiceBtn" title="语音报牌" aria-label="语音报牌"></button>
    <button class="ibtn" id="rulesBtn" title="规则" aria-label="规则"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h6M8 11h6"/></svg></button>
    <button class="ibtn" id="fsBtn" title="全屏" aria-label="全屏"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </div>
@@ -2060,6 +2063,7 @@ let totals = [0, 0, 0, 0], dealer = 0, roundNo = 0, discardsMade = 0, lastSrc = 
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 let hintOn = store.get('kdd_hint', '0') === '1';
 let soundOn = store.get('kdd_sound', '1') === '1';
+let voiceOn = store.get('kdd_voice', '1') === '1';
 
 /* ---------------- sound (WebAudio, generated) ---------------- */
 const Snd = {
@@ -2089,6 +2093,53 @@ const Snd = {
     seq.forEach((f, i) => this.tone(f, t + i * 0.09, kind === 'hu' ? 0.5 : 0.28, 'triangle', kind === 'hu' ? 0.16 : 0.13));
   }
 };
+
+/* ---------------- voice (speechSynthesis): call out discards and 碰/杠/听/胡/自摸 — live play only ---------------- */
+const CN_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+const SAY_HONOR = ['东风', '南风', '西风', '北风', '红中', '发财', '白板'];
+const sayTile = t => t < 27 ? CN_NUM[t % 9] + ['万', '筒', '条'][(t / 9) | 0] : SAY_HONOR[t - 27];
+const Voice = {
+  ss: null, voice: null, primed: false, calls: 0, deferred: null,
+  init() {
+    try { this.ss = window.speechSynthesis || null; if (!this.ss || !window.SpeechSynthesisUtterance) { this.ss = null; return; } } catch (e) { this.ss = null; return; }
+    const pick = () => { try {
+      const vs = this.ss.getVoices() || [], norm = v => String(v.lang || '').replace('_', '-').toLowerCase();
+      this.voice = vs.find(v => norm(v) === 'zh-cn' && v.localService) || vs.find(v => norm(v) === 'zh-cn') || vs.find(v => /^cmn/.test(norm(v)))
+        || vs.find(v => /^zh-(hans|sg)/.test(norm(v))) || vs.find(v => norm(v) === 'zh-tw') || null;
+    } catch (e) {} };
+    pick();
+    try { if (this.ss.addEventListener) this.ss.addEventListener('voiceschanged', pick); else this.ss.onvoiceschanged = pick; } catch (e) {}
+  },
+  utter(text) {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = this.voice ? this.voice.lang : 'zh-CN'; if (this.voice) u.voice = this.voice;
+    u.rate = 1.1; u.pitch = 1; u.volume = 1; return u;
+  },
+  /* iOS only lets speech start from a user gesture: speak a silent blank once on the first tap */
+  prime() {
+    if (this.primed || !this.ss || !voiceOn) return; this.primed = true;
+    try { const u = this.utter(' '); u.volume = 0; this.ss.speak(u); } catch (e) {}
+  },
+  /* a discard: cut off the previous tile name so fast AI turns never build a backlog; never cut off a call */
+  tile(t) {
+    if (!this.ss || !voiceOn) return;
+    const text = sayTile(t);
+    if (this.calls > 0) { this.deferred = text; return; }
+    try { this.ss.cancel(); this.ss.speak(this.utter(text)); } catch (e) {}
+  },
+  /* 碰 / 杠 / 听 / 胡 / 自摸: queued behind whatever is speaking, and protected from the next discard */
+  call(text) {
+    if (!this.ss || !voiceOn) return;
+    try {
+      const u = this.utter(text); let done = false;
+      const fin = () => { if (done) return; done = true; this.calls = Math.max(0, this.calls - 1); if (!this.calls && this.deferred) { const d = this.deferred; this.deferred = null; if (voiceOn) try { this.ss.speak(this.utter(d)); } catch (e) {} } };
+      u.onend = fin; u.onerror = fin; setTimeout(fin, 3000);
+      this.calls++; this.ss.speak(u);
+    } catch (e) {}
+  },
+  stop() { this.calls = 0; this.deferred = null; try { if (this.ss) this.ss.cancel(); } catch (e) {} }
+};
+Voice.init();
 
 /* haptics (Android Chrome etc.; silently ignored on iPhone) — follows the sound toggle */
 const buzz = p => { try { if (soundOn && navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
@@ -2399,18 +2450,18 @@ const hooks = {
     if (e.type === 'discard') {
       const src = e.p === 0 ? lastSrc : rectOf($('seat' + e.p).querySelector('.backs .back:last-child') || $('seat' + e.p));
       lastSrc = null;
-      render(); fly(lastPondTile(e.p), src, e.p === 0 ? 1.6 : 0.7); Snd.clack();
-      if (e.ting) { stampAt(plateEl(e.p), '听', 'ting'); Snd.chime('ting'); }
+      render(); fly(lastPondTile(e.p), src, e.p === 0 ? 1.6 : 0.7); Snd.clack(); Voice.tile(e.t);
+      if (e.ting) { stampAt(plateEl(e.p), '听', 'ting'); Snd.chime('ting'); Voice.call('听'); }
       await sleep(e.p === 0 ? 260 : (e.ting ? 900 : 400)); return;
     }
     if (e.type === 'peng' || e.type === 'gang' || e.type === 'angang' || e.type === 'bugang') {
       render();
       const melds = e.p === 0 ? $('mymelds') : $('seat' + e.p).querySelector('.melds');
       const m = melds && melds.lastElementChild; if (m) m.classList.add('pop');
-      stampAt(plateEl(e.p), e.type === 'peng' ? '碰' : '杠', e.type === 'peng' ? 'peng' : 'gang'); Snd.chime(e.type === 'peng' ? 'peng' : 'gang');
+      stampAt(plateEl(e.p), e.type === 'peng' ? '碰' : '杠', e.type === 'peng' ? 'peng' : 'gang'); Snd.chime(e.type === 'peng' ? 'peng' : 'gang'); Voice.call(e.type === 'peng' ? '碰' : '杠');
       await sleep(700); return;
     }
-    if (e.type === 'hu') { render(); stampAt($('compass'), e.zimo ? '自摸' : '胡', 'hu', true); Snd.chime('hu'); buzz(e.p === 0 ? [40, 50, 40, 50, 80] : 40); await sleep(1400); return; }
+    if (e.type === 'hu') { render(); stampAt($('compass'), e.zimo ? '自摸' : '胡', 'hu', true); Snd.chime('hu'); Voice.call(e.zimo ? '自摸' : '胡'); buzz(e.p === 0 ? [40, 50, 40, 50, 80] : 40); await sleep(1400); return; }
     if (e.type === 'end') { render(); stampAt($('compass'), '流局', 'flow'); Snd.chime('flow'); await sleep(1100); }
   }
 };
@@ -2481,12 +2532,25 @@ $('hintbar').addEventListener('click', () => { hintOpen = !hintOpen; renderMe();
 function syncToggles() {
   $('hintToggle').classList.toggle('on', hintOn);
   $('soundBtn').classList.toggle('on', soundOn);
+  $('voiceBtn').classList.toggle('on', voiceOn);
+  $('voiceBtn').innerHTML = voiceOn
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 4v-4H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M6 9h9M6 12h6"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 4v-4H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M3 3l18 18"/></svg>';
   $('soundBtn').innerHTML = soundOn
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>';
 }
 $('hintToggle').addEventListener('click', () => { hintOn = !hintOn; hintOpen = false; store.set('kdd_hint', hintOn ? '1' : '0'); syncToggles(); render(); });
 $('soundBtn').addEventListener('click', () => { soundOn = !soundOn; store.set('kdd_sound', soundOn ? '1' : '0'); syncToggles(); if (soundOn) Snd.blip(); });
+function toast(text) {
+  const d = document.createElement('div'); d.className = 'toast'; d.textContent = text; $('fx').appendChild(d);
+  setTimeout(() => d.remove(), 1400);
+}
+$('voiceBtn').addEventListener('click', () => {
+  voiceOn = !voiceOn; store.set('kdd_voice', voiceOn ? '1' : '0'); syncToggles();
+  if (voiceOn) { Voice.primed = false; Voice.prime(); Voice.call('语音报牌'); } else Voice.stop();
+  toast(voiceOn ? '语音报牌：开' : '语音报牌：关');
+});
 $('rulesBtn').addEventListener('click', showRules);
 syncToggles();
 const onMQ = () => render();
@@ -2513,6 +2577,7 @@ $('fsBtn').addEventListener('click', async () => {
 const isPhone = window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 500;
 if (isPhone && reqFS) document.addEventListener('pointerup', function first() { document.removeEventListener('pointerup', first); goFullscreen(); }, { once: true });
 document.addEventListener('pointerdown', () => Snd.ensure(), { once: true });
+['pointerdown', 'touchend', 'click'].forEach(ev => document.addEventListener(ev, () => Voice.prime(), { once: true, capture: true }));
 
 /* ---------------- modals ---------------- */
 function showModal(html) { $('modalbox').innerHTML = html; $('modal').classList.remove('hidden'); }
@@ -2524,7 +2589,7 @@ function showRules() {
   <h3>算分</h3><ul><li>得分 = 底分（没有龙时 = 胡的那张牌的点数；有龙时 = 每种龙 20）；自摸 ×2；每个暗杠再 ×2。</li><li>自摸：三家各付一份。点炮：没报听的人点炮 → 一个人包三家；已报听的人点炮 → 三家各付一份。</li><li>不带耗子、不带庄分；牌墙摸完没人胡算流局，庄家没胡就轮庄。</li></ul>
   <h3>龙（加分牌型）</h3><ul><li><b>青龙</b>：清一色，整手牌连副露都是同一门数字牌，没有字牌，什么牌型都行。</li><li><b>七对龙</b>：七对胡牌，只能门清；四张一样的算两对。</li><li><b>一条龙</b>：普通牌型里有同一门的 123、456、789 三组顺子（门清，不能吃）。</li><li>每种龙底分 <b>20</b>，可以叠加：青龙 + 七对龙 = 40，青龙 + 一条龙 = 40（七对龙和一条龙不会同时出现）。有龙时<b>底分代替胡牌那张的点数</b>，再算自摸 ×2、暗杠 ×2。</li><li>注意：<b>能不能胡仍然看胡的那张牌</b>——要报听、听口要有 6 点以上才能报听；胡 1–2 点的牌不能胡，3–5 点只能自摸，6 点以上才能点炮胡，有龙也一样。</li><li>例：青龙 20 + 七对龙 20 = 40 × 自摸 2 = 80 分，三家各付 80。</li></ul>
   <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数，再比好进张，好进张一样再比总进张；都一样时才看孤张字牌、点数等小细节。</li></ul>
-  <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li></ul></div>
+  <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>右上角的对话气泡按钮是「语音报牌」：开着时会念出每张打出的牌，以及碰、杠、听、胡、自摸；和音效按钮分开控制。</li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li></ul></div>
   <div class="mfoot"><button class="gbtn" id="closeRules2">知道了</button></div>`);
   $('closeRules').onclick = hideModal; $('closeRules2').onclick = hideModal;
 }
@@ -2592,7 +2657,7 @@ async function startRound() {
   if (rec) { T.recFinish(rec, st); lastRec = rec; try { an = window.KDDTrainUI ? window.KDDTrainUI.onHandEnd(rec) : null; } catch (e) { console.error(e); } }
   showResult(r, rec, an);
 }
-window.__kdd = { get st() { return st; }, get pending() { return pending; }, render, startRound, tileHTML, backHTML };
+window.__kdd = { get st() { return st; }, get pending() { return pending; }, Voice, sayTile, render, startRound, tileHTML, backHTML };
 window.KDDUI = { tileHTML, backHTML, meldHTML, Snd, showModal, hideModal, startRound, render,
   get busy() { return busy; }, get st() { return st; }, get lastRec() { return lastRec; } };
 if (!window.KDDT || /[?&](seed=|play)/.test(location.search)) startRound();
