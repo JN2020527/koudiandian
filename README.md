@@ -1,1 +1,7 @@
-# koudiandian
+# 扣点点
+
+山西扣点点麻将练习工具（对局、复盘、专项练习）
+
+在线游玩：https://jn2020527.github.io/koudiandian/
+
+建议使用手机横屏游玩，体验最佳。
