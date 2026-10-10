@@ -526,6 +526,28 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .ukgt i,.uknt i{font-style:normal;font-weight:900;font-size:10px;margin-right:4px}
 .ukgt{background:rgba(47,158,91,.4);box-shadow:inset 0 0 0 1px rgba(91,224,138,.7);color:#d9ffe6}.ukgt i{color:#7dffaa}
 .uknt{background:rgba(140,150,145,.22);box-shadow:inset 0 0 0 1px rgba(180,190,185,.35);color:#b9c3be}.uknt i{color:#cfd8d3}
+.ukts{display:inline-flex;flex-wrap:wrap;gap:3px 4px;align-items:center;vertical-align:middle;min-width:0}
+.ukts.none{font-size:11px;color:var(--muted)}
+.ukc{display:inline-flex;align-items:center;gap:2px;padding:1px 4px 1px 1px;border-radius:5px;background:rgba(47,158,91,.26);box-shadow:inset 0 0 0 1px rgba(91,224,138,.45);line-height:1}
+.ukc b{font-size:11px;font-weight:800;color:#d9ffe6;font-variant-numeric:tabular-nums}
+.ukc.hi{background:rgba(255,196,60,.32);box-shadow:inset 0 0 0 1.5px #ffd769}.ukc.hi b{color:#fff0b8}
+.tile.tu,#train .tile.tu{--w:16px;--h:22px;border-radius:3px;border-width:1px;box-shadow:inset 0 1px 0 #fff,0 1px 0 #c9b98a,0 2px 1px rgba(0,0,0,.35)}
+.orow.ukr{flex-wrap:wrap;row-gap:3px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.orow.ukr.nox{cursor:default}
+.orow.ukr .o2{flex:1;min-width:0}
+.otag{font-size:10px;font-weight:900;border-radius:4px;padding:0 4px;line-height:15px;background:#2f9e5b;color:#fff;flex:none}
+.orow.mine .otag{background:#c9453a}
+.ukar{margin-left:auto;color:var(--muted);font-size:15px;font-weight:900;line-height:1;transition:transform .15s;flex:none}
+.orow.open .ukar{transform:rotate(90deg)}
+.okt{display:none;flex-basis:100%;align-items:flex-start;gap:6px;padding:2px 0 2px 2px}
+.orow.open .okt{display:flex}
+.okl{flex:none;font-size:10px;font-weight:900;color:#7dffaa;line-height:24px}
+.ukcmp{margin:6px 0 2px;display:flex;flex-direction:column;gap:4px}
+.ukl{display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;font-size:12px;line-height:1.4}
+.ukl .ukh{flex-basis:100%}.ukl b{color:var(--gold)}
+.ukl.mine .ukh{color:#ffc4ba}.ukl.sum{color:var(--muted);font-size:11.5px}
+.hgood{display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;margin-top:4px;padding-top:4px;border-top:1px dashed rgba(255,215,105,.3)}
+.hgood .hgl{font-size:12px}
 .orow .dg{font-style:normal;color:#fff;background:#b33a32;border-radius:4px;padding:0 4px;font-size:10px}
 .pk{display:flex;flex-direction:column;gap:5px}
 .pkr{display:flex;gap:4px}
@@ -660,6 +682,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
  .dq,.rv{max-width:1240px;max-height:820px;margin:0 auto}
  #train .tile.tk{--w:40px;--h:55px}#train .tile.tm{--w:32px;--h:44px}
  .dq .prompt{font-size:22px}.ex,.vm{font-size:15px}.orow{font-size:13px}.prow .pl{width:66px;font-size:14px}
+ #train .tile.tu{--w:20px;--h:27px}.ukc b{font-size:13px}.ukl{font-size:14px}.ukl.sum{font-size:13px}.okl{font-size:12px;line-height:29px}.otag{font-size:12px;line-height:18px}
 }
 @media (max-height:500px){
  #train{--sidew:292px;--thw:min(46px,calc((100vw - 80px)/15.5),calc(10.6 * var(--vh1,1vh)));--tpw:17px}
@@ -1501,7 +1524,7 @@ function analyzeSelf(d) {
   const eng = G.AI.selfTurn(st, 0, o);
   const recTile = tb.eng[0].tile, recTing = o.tingOptions.some(x => x.tile === recTile);
   out.rec = { type: 'discard', tile: recTile, ting: recTing };
-  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, uk: r.uk, ug: r.ug, un: r.un, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger, wb: r.wb || null }));
+  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, uk: r.uk, ug: r.ug, un: r.un, goodTiles: r.goodTiles, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger, wb: r.wb || null }));
   out.rem = tb.rem;
   const K = byT[a.tile], R = byT[recTile];
   const B = tb.rows.filter(r => r.s === tb.minS).sort(effCmp)[0];
@@ -2204,6 +2227,11 @@ const buzz = p => { try { if (soundOn && navigator.vibrate) navigator.vibrate(p)
 function tileHTML(t, size, cls, attrs) {
   return `<div class="tile ${size || ''} ${cls || ''}" title="${G.tname(t)}（${G.pts(t)}点）" ${attrs || ''}>${window.KDDTiles.faceSVG(t)}</div>`;
 }
+/* 好进张 chips: small tiles + remaining count, sorted by suit/number; hi = Set of tiles to highlight (e.g. only the better discard gets them) */
+function ukTilesHTML(tiles, rem, hi) {
+  if (!tiles || !tiles.length) return '<span class="ukts none">无</span>';
+  return `<span class="ukts">${tiles.slice().sort((a, b) => a - b).map(t => `<span class="ukc${hi && hi.has(t) ? ' hi' : ''}">${tileHTML(t, 'tu')}<b>×${rem ? rem[t] : '?'}</b></span>`).join('')}</span>`;
+}
 function backHTML(size) { return `<div class="tile ${size} facedown"></div>`; }
 function meldHTML(m, size, mine) {
   const lbl = { peng: '碰', mingang: '明杠', angang: '暗杠', bugang: '补杠' }[m.type];
@@ -2453,8 +2481,9 @@ function computeHint(rem) {
     else if (b.isolated) { short = '孤张'; reason = '孤张，周围没有能连的牌'; }
     else if (tp <= 2) { short = '点数太小'; reason = '1–2 点的牌做听口不能胡，价值低'; }
     else { short = '好进张最多'; reason = '打它留下的好进张（直接成组/补将/听牌）最多'; }
-    const tail = b.s === 0 ? (b.legal ? `打后听 ${ws(b.waits)}` : '打后虽然听牌，但听口没有 6 点以上的牌，不能报听，继续改良') : `打后 ${b.s} 向听，进 ${b.ukeire} 张（<b class="ukg">好 ${b.ug}</b> · 一般 ${b.un}）`;
-    return { rec: b.tile, short: `打 <b>${name}</b> · ${short}`, text: `${reason}；${tail}。` };
+    const tail = b.s === 0 ? (b.legal ? `打后听 ${ws(b.waits)}` : '打后虽然听牌，但听口没有 6 点以上的牌，不能报听，继续改良') : `打后 ${b.s} 向听，进 ${b.ukeire} 张（<b class="ukg">好 ${b.ug}</b> · <span class="ukn">一般 ${b.un}</span>）`;
+    const gl = b.s > 0 && b.good && b.good.length ? `<div class="hgood"><span class="hgl">好进张 <b class="ukg">${b.ug}</b> 张：</span>${ukTilesHTML(b.good, rem)}</div>` : '';
+    return { rec: b.tile, short: `打 <b>${name}</b> · ${short}`, text: `${reason}；${tail}。${gl}` };
   }
   if (pending && pending.kind === 'claim') {
     const d = G.AI.claim(st, 0, pending.t, pending.o);
@@ -2767,7 +2796,7 @@ async function startRound() {
   showResult(r, rec, an);
 }
 window.__kdd = { get st() { return st; }, get pending() { return pending; }, Voice, sayTile, render, startRound, tileHTML, backHTML };
-window.KDDUI = { tileHTML, backHTML, meldHTML, Snd, showModal, hideModal, startRound, render,
+window.KDDUI = { tileHTML, ukTilesHTML, backHTML, meldHTML, Snd, showModal, hideModal, startRound, render,
   get busy() { return busy; }, get st() { return st; }, get lastRec() { return lastRec; } };
 if (!window.KDDT || /[?&](seed=|play)/.test(location.search)) startRound();
 })();
@@ -2958,6 +2987,26 @@ function selBox(label) {
   return `<div class="selbox">${label} ${tl(D.selT, 'tk')} <b>${tn(D.selT)}</b>？</div><div class="sbtns next"><button class="gbtn sm" data-act="confirm">确定打 ${tn(D.selT)}</button></div>`;
 }
 const TIERL = ['安全', '较安全', '一般', '危险'];
+/* 好进张 detail: a candidate row whose good tiles drop onto a line underneath (tap to expand/collapse) */
+const ukChips = (tiles, rem, hi) => U.ukTilesHTML(tiles, rem, hi);
+function ukRow(r, rem, o) {
+  const has = r.s > 0 && r.goodTiles && r.goodTiles.length, open = has && o.open;
+  return `<div class="orow ukr ${o.cls || ''} ${open ? 'open' : ''} ${has ? '' : 'nox'}" ${has ? 'data-act="ukx"' : ''}>${tl(r.tile, 'tp')}${o.tag ? `<span class="otag">${o.tag}</span>` : ''}` +
+    `<span class="o1">${o.o1}</span><span class="o2">${o.o2}</span>${has ? '<span class="ukar" aria-hidden="true">›</span>' : ''}` +
+    (has ? `<div class="okt"><span class="okl">好进张</span>${ukChips(r.goodTiles, rem, o.hi)}</div>` : '') + `</div>`;
+}
+/* concrete comparison: which good tiles only the better discard keeps (and vice versa) */
+function ukCmpHTML(a, b, rem, mineLabel) {
+  if (!a || !b || a.s !== b.s || a.s <= 0 || !a.goodTiles || !b.goodTiles) return '';
+  const bs = new Set(b.goodTiles), as = new Set(a.goodTiles);
+  const onlyA = a.goodTiles.filter(t => !bs.has(t)), onlyB = b.goodTiles.filter(t => !as.has(t));
+  const sum = xs => xs.reduce((x, t) => x + (rem[t] || 0), 0);
+  if (!onlyA.length && !onlyB.length) return `<div class="ukcmp"><div class="ukl"><span class="ukh">两张打法的好进张完全一样（${a.ug} 张）</span></div></div>`;
+  return `<div class="ukcmp">` +
+    (onlyA.length ? `<div class="ukl"><span class="ukh">打 <b>${tn(a.tile)}</b> 多出来的好进张 <b class="ukg">+${sum(onlyA)}</b> 张：</span>${ukChips(onlyA, rem, new Set(onlyA))}</div>` : '') +
+    (onlyB.length ? `<div class="ukl mine"><span class="ukh">${mineLabel} <b>${tn(b.tile)}</b> 独有 ${sum(onlyB)} 张：</span>${ukChips(onlyB, rem)}</div>` : '') +
+    `<div class="ukl sum">其余 ${a.goodTiles.length - onlyA.length} 种好进张两边都有</div></div>`;
+}
 function renderDrill() {
   const s = D, q = s.qs[s.i], done = !!s.res;
   let prompt = '', board = '', side = '', hand = '', cls = q.type;
@@ -2979,13 +3028,21 @@ function renderDrill() {
       if (!s.res.correct && !top.includes(mine)) top[4] = mine;
       // why the best wins: vs your pick, or vs the runner-up when you were right
       const rival = s.res.correct ? srt.find(r => !q.answer.includes(r.tile)) : mine;
-      const ukH = r => `进 <b>${r.uk}</b>（<b class="ukg">好 ${r.ug}</b> · <span class="ukn">一般 ${r.un}</span>）`;
-      const tilesH = r => (r.goodTiles.length ? `<span class="ukgt"><i>好</i>${T.groupStr(r.goodTiles)}</span>` : '') + (r.normTiles.length ? `<span class="uknt"><i>一般</i>${T.groupStr(r.normTiles)}</span>` : '');
+      const rem = T.remFromSeen(q.hand, q.seen);
+      const ukH = r => `好进张 <b class="ukg">${r.ug}</b> 张<span class="ukn"> · 一般 ${r.un}</span>`;
+      const cmpA = best, cmpB = rival && rival.s === best.s ? rival : null;
+      const onlyBest = cmpB ? new Set(best.goodTiles.filter(t => !cmpB.goodTiles.includes(t))) : null;
       side = fb(s.res.correct) + `<div class="ex">最佳：打 <b>${q.answer.map(tn).join(' / ')}</b>，${T.sName(best.s)}，${ukH(best)}` +
         (s.res.correct ? '' : `<br>你打 <b>${tn(s.ans)}</b>：${mine.s > q.minS ? `退成${T.sName(mine.s)}` : ukH(mine)}`) + `</div>` +
         (rival ? `<div class="ex why">💡 ${s.res.correct ? `比次选 ${tn(rival.tile)}：` : ''}${T.effWhy(best, rival)}</div>` : '') +
-        `<div class="otab uk">${top.map(r => `<div class="orow ${q.answer.includes(r.tile) ? 'best' : ''} ${r.tile === s.ans && !s.res.correct ? 'mine' : ''}">${tl(r.tile, 'tp')}<span class="o1">${r.s > q.minS ? '退向听' : `<b class="ukg">${r.ug}</b><i>/${r.uk}</i>`}</span><span class="o2">${r.s > q.minS ? '' : tilesH(r)}</span></div>`).join('')}</div>` +
-        `<div class="ex small"><b class="ukg">好进张</b>：摸到直接成一组顺子/刻子、补出缺的将，或直接听牌（七对路线上凑出新对子也算）。<span class="ukn">一般进张</span>：其余能减少向听的牌（如孤张变搭子）。</div>` + nextBtn();
+        (cmpB ? ukCmpHTML(cmpA, cmpB, rem, s.res.correct ? '次选' : '你打') : '') +
+        `<div class="otab uk">${top.map(r => {
+          const isBest = q.answer.includes(r.tile), isMine = r.tile === s.ans && !s.res.correct, back = r.s > q.minS;
+          return ukRow(r, rem, { cls: isBest ? 'best' : isMine ? 'mine' : '', open: isBest ? r.tile === q.answer[0] || r.tile === s.ans : isMine,
+            tag: isBest ? '最佳' : isMine ? '你打' : '', hi: isBest && r.tile === best.tile ? onlyBest : null,
+            o1: back ? '退向听' : `<b class="ukg">好 ${r.ug}</b>`, o2: back ? '' : `<span class="ukn">一般 ${r.un}</span>` });
+        }).join('')}</div>` +
+        `<div class="ex small">点任一行展开/收起它的好进张。<b class="ukg">好进张</b>：摸到直接成一组顺子/刻子、补出缺的将，或直接听牌（七对路线上凑出新对子也算）。×N = 场上还剩几张。<span class="ukn">一般进张</span>：其余能减少向听的牌（如孤张变搭子）。</div>` + nextBtn();
     }
   } else if (q.type === 'tingpai') {
     prompt = `这手牌<b>听哪几张</b>？（可多选）<b>能不能报听</b>？`;
@@ -3215,12 +3272,26 @@ function renderReview() {
   const lastP = it.kind === 'claim' && sn.lastDiscard ? sn.lastDiscard.p : null;
   const V = VERD[it.verdict];
   let opts = '';
+  let cmp = '';
   if (it.rows) {
-    opts = `<div class="otab">${it.rows.slice(0, 5).map(r => `<div class="orow ${it.rec && it.rec.tile === r.tile ? 'best' : (it.a && it.a.tile === r.tile ? 'mine' : '')}">${tl(r.tile, 'tp')}<span class="o1">${r.s === 0 ? (r.legal ? '可报听' : '听(<6点)') : T.sName(r.s)}</span><span class="o2">${r.s === 0 ? `听 ${r.waits.map(tn).join(' ')} · 能胡 ${r.winRem}` : `进 ${r.uk}（<b class="ukg">好 ${r.ug}</b> · <span class="ukn">一般 ${r.un}</span>）`}${r.danger >= 6 ? ' <em class="dg">危险</em>' : ''}</span></div>`).join('')}</div>`;
+    const rem = it.rem || null, recT = it.rec && it.rec.type === 'discard' ? it.rec.tile : null, myT = it.a && it.a.type === 'discard' ? it.a.tile : null;
+    const rows = it.rows.slice(0, 5);
+    const myRow = it.rows.find(r => r.tile === myT); if (myRow && !rows.includes(myRow)) rows[4] = myRow;
+    const recRow = it.rows.find(r => r.tile === recT);
+    const onlyRec = recRow && myRow && recRow !== myRow && recRow.s === myRow.s && recRow.goodTiles && myRow.goodTiles ? new Set(recRow.goodTiles.filter(t => !myRow.goodTiles.includes(t))) : null;
+    if (rem && recRow && myRow && recRow !== myRow && it.kind === 'self' && it.verdict !== 'good') cmp = ukCmpHTML(recRow, myRow, rem, '你打');
+    opts = `<div class="otab uk rvt">${rows.map(r => {
+      const isRec = r.tile === recT, isMine = r.tile === myT && !isRec;
+      const o1 = r.s === 0 ? (r.legal ? '可报听' : '听(<6点)') : T.sName(r.s);
+      const dg = r.danger >= 6 ? ' <em class="dg">危险</em>' : '';
+      if (r.s === 0 || !rem || !r.goodTiles) return `<div class="orow ${isRec ? 'best' : isMine ? 'mine' : ''}">${tl(r.tile, 'tp')}<span class="o1">${o1}</span><span class="o2">${r.s === 0 ? `听 ${r.waits.map(tn).join(' ')} · 能胡 ${r.winRem}` : `进 ${r.uk}（<b class="ukg">好 ${r.ug}</b> · <span class="ukn">一般 ${r.un}</span>）`}${dg}</span></div>`;
+      return ukRow(r, rem, { cls: isRec ? 'best' : isMine ? 'mine' : '', open: isRec || isMine, tag: isRec ? '推荐' : isMine ? '你打' : '', hi: isRec ? onlyRec : null,
+        o1, o2: `<b class="ukg">好 ${r.ug}</b> <span class="ukn">· 一般 ${r.un}</span>${dg}` });
+    }).join('')}</div>`;
   }
   const claimInfo = it.kind === 'claim' ? `<div class="ex">${NAMES[lastP]} 打出 ${tl(it.t, 'tp')}，你可以${[d.o.hu && '胡', d.o.peng && '碰', d.o.gang && '杠'].filter(Boolean).join(' / ')}</div>` : '';
   const side = `<div class="vcard ${it.verdict}"><div class="vh"><span class="vi">${it.fp ? '💥' : V.ic}</span><span class="vl">${it.fp ? '放炮' : V.lb}</span><span class="vx">第 ${it.xun} 巡</span></div>` +
-    `<div class="vr"><span>你：<b>${actStr(it)}</b></span>${it.rec ? `<span>推荐：<b>${recActStr(it.rec)}</b></span>` : ''}</div><div class="vm">${esc(it.msg)}</div></div>${claimInfo}${opts}`;
+    `<div class="vr"><span>你：<b>${actStr(it)}</b></span>${it.rec ? `<span>推荐：<b>${recActStr(it.rec)}</b></span>` : ''}</div><div class="vm">${esc(it.msg)}</div>${cmp}</div>${claimInfo}${opts}`;
   const nav = `<label class="only"><input type="checkbox" data-act="revOnly" ${R.only ? 'checked' : ''}><span>只看问题手</span></label>` +
     `<div class="rnav"><button class="nbtn" data-act="revPrev" ${pos <= 0 ? 'disabled' : ''} aria-label="上一手">‹</button><span class="rpos"><b>${pos + 1}</b>/${list.length}</span><button class="nbtn pri" data-act="revNext" ${pos >= list.length - 1 ? 'disabled' : ''} aria-label="下一手">›</button></div>` +
     `<button class="gbtn sm ghost" data-act="export">导出</button>`;
@@ -3268,6 +3339,7 @@ const ACT = {
   tcan(b) { D.can = b.dataset.v === '1'; renderDrill(); },
   tsubmit() { if (D.pick.size && D.can != null) submit({ waits: [...D.pick], canTing: D.can }); },
   sf(b) { submit(+b.dataset.i); },
+  ukx(b) { b.classList.toggle('open'); },
   nextQ() { D.i++; showQuestion(); },
   wdel(b) { LS.set('kdd_wrong', LS.get('kdd_wrong', []).filter(w => w.q.id !== b.dataset.id)); showWrong(); },
   wredo(b) { redoWrong(b.dataset.type); },
