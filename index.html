@@ -290,6 +290,44 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .gbtn:active{transform:translateY(2px);box-shadow:0 2px 0 #8a5f12}
 .gbtn.ghost{background:rgba(0,0,0,.3);color:#eee;border-color:rgba(255,255,255,.35);box-shadow:none}
 .mclose{position:absolute;z-index:3;top:10px;right:10px;width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.25);color:#eee;font-size:15px;cursor:pointer}
+/* 报听扣的牌 */
+.tile.kou.mine,.tile.kou.open{opacity:.6;outline:1.5px dashed #ffd769;outline-offset:-1px}
+.tile.kou.facedown{position:relative}
+.tile.kou.facedown.last{outline:2px solid #ffd769}
+.legend .tile.kou.lg{display:inline-block;vertical-align:middle;margin:0 2px}
+.koulg{color:#ffe9a8}
+/* 选声音 */
+#voiceBtn{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.rules .lnk{border:1px solid rgba(255,215,105,.5);background:rgba(0,0,0,.25);color:var(--gold,#ffd769);border-radius:999px;padding:1px 10px;margin-left:6px;font-size:13px;cursor:pointer}
+.vctl{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 8px}
+.vsw{display:flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.28);color:#ddd;border-radius:999px;padding:5px 14px 5px 6px;font-size:15px;cursor:pointer}
+.vsw .knob{width:34px;height:20px;border-radius:999px;background:rgba(255,255,255,.2);position:relative;flex:none;transition:background .15s}
+.vsw .knob::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#ccc;transition:left .15s}
+.vsw.on{color:#fff;border-color:rgba(255,215,105,.55)}.vsw.on .knob{background:#3fae6a}.vsw.on .knob::after{left:16px;background:#fff}
+.vrate{display:flex;align-items:center;gap:0;border:1px solid rgba(255,255,255,.3);border-radius:999px;overflow:hidden;background:rgba(0,0,0,.28)}
+.vrate .lb{padding:0 10px 0 12px;font-size:14px;color:#cfe3d8}
+.vrate button{border:0;border-left:1px solid rgba(255,255,255,.18);background:none;color:#ddd;font-size:15px;padding:6px 14px;cursor:pointer}
+.vrate button.on{background:linear-gradient(#ffe9a0,#e7b23c);color:#3b2a00;font-weight:800}
+.vlist{display:grid;grid-template-columns:1fr;gap:6px;max-height:min(46vh,360px);overflow:auto;padding:2px;-webkit-overflow-scrolling:touch}
+@media (min-width:700px){.vlist{grid-template-columns:1fr 1fr}.vlist .vopt:first-child,.vlist .vnote{grid-column:1/-1}}
+.vopt{display:flex;align-items:center;gap:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.22);border-radius:12px;padding:7px 8px 7px 10px;cursor:pointer;min-height:44px;outline:none}
+.vopt:focus-visible{border-color:var(--gold,#ffd769)}
+.vopt.sel{border-color:#ffd769;background:rgba(255,215,105,.14);box-shadow:inset 0 0 0 1px rgba(255,215,105,.4)}
+.vopt .rad{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,.5);flex:none;position:relative}
+.vopt.sel .rad{border-color:#ffd769}.vopt.sel .rad::after{content:'';position:absolute;inset:3px;border-radius:50%;background:#ffd769}
+.vopt .vnm{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;color:#fff}
+.vopt .vnm b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.vopt .vnm small{flex-basis:100%;font-size:12.5px;color:#cfe3d8}
+.vtags{display:flex;gap:4px;flex-wrap:wrap}
+.vtags i{font-style:normal;font-size:11.5px;line-height:1;padding:3px 6px;border-radius:6px;background:rgba(255,255,255,.12);color:#d6e6dc}
+.vtags i.rec{background:#e7b23c;color:#3b2a00;font-weight:800}.vtags i.bad{background:#a33;color:#fff}
+.vtry{flex:none;border:1px solid rgba(255,215,105,.5);background:rgba(0,0,0,.3);color:#ffe9a8;border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer;white-space:nowrap}
+.vnote{font-size:13px;color:#cfe3d8;padding:4px 6px}
+@media (max-height:500px){
+ .vctl{margin:2px 0 6px}.vsw{font-size:14px;padding:3px 12px 3px 5px}.vrate button{padding:4px 12px;font-size:14px}
+ .vlist{grid-template-columns:1fr 1fr;max-height:calc(var(--app-h,100dvh) - 170px)}
+ .vopt{min-height:40px;padding:5px 6px 5px 8px;gap:8px}.vopt .vnm b{font-size:15px}.vtry{padding:5px 10px;font-size:13px}
+}
 .rules h3{font-size:14px;color:var(--gold);margin:10px 0 4px}
 .rules ul{list-style:none;font-size:13.5px;line-height:1.75;color:#e8f0eb}
 .rules li::before{content:"◆";color:var(--gold2);font-size:9px;margin-right:6px;vertical-align:2px}
@@ -1108,7 +1146,7 @@ function drawTile(st, p, fromBack) {
 function visibleCounts(st, viewer) {
   const v = new Array(34).fill(0);
   st.players.forEach((pl, i) => {
-    for (const d of pl.discards) if (!d.claimed) v[d.t]++;
+    for (const d of pl.discards) if (!d.claimed && !(d.tingMark && i !== viewer)) v[d.t]++; // 报听扣的牌：只有打的人自己知道
     for (const m of pl.melds) v[m.tile] += (m.type === 'peng' ? 3 : 4);
     if (i === viewer) for (const t of pl.hand) v[t]++;
   });
@@ -1214,7 +1252,7 @@ async function playRound(st, agents, hooks) {
       const t = drawTile(st, p, mode === 'drawBack');
       await ev({ type: 'draw', p, t, fromBack: mode === 'drawBack' });
     } else pl.drawn = null;
-    let discarded = null;
+    let discarded = null, discTing = false;
     for (;;) {
       const o = selfOptions(st, p);
       const a = await agents[p].selfTurn(st, p, o);
@@ -1237,12 +1275,12 @@ async function playRound(st, agents, hooks) {
         if (a.ting && !o.tingOptions.some(x => x.tile === a.tile)) throw new Error('illegal 报听');
         applyDiscard(st, p, a.tile, !!a.ting);
         await ev({ type: 'discard', p, t: a.tile, ting: !!a.ting });
-        discarded = a.tile; break;
+        discarded = a.tile; discTing = !!a.ting; break;
       }
       throw new Error('unknown action');
     }
     const t = discarded, claims = [];
-    for (let k = 1; k <= 3; k++) { const q = (p + k) % 4; const o = claimOptions(st, q, t); if (o) claims.push({ q, o }); }
+    if (!discTing) for (let k = 1; k <= 3; k++) { const q = (p + k) % 4; const o = claimOptions(st, q, t); if (o) claims.push({ q, o }); } // 报听扣下的牌不能碰、杠、胡
     let winner = null, pg = null;
     for (const { q, o } of claims.filter(x => x.o.hu)) {
       const r = await agents[q].claim(st, q, t, o);
@@ -1273,7 +1311,7 @@ function danger(st, p, t, vis, threats) {
     const ds = st.players[q].discards;
     let dq;
     if (ds.some(x => x.t === t && x.afterTing)) dq = 0;      // 报听后打过的：绝对安全
-    else if (ds.some(x => x.t === t)) dq = 2;                // 现物
+    else if (ds.some(x => x.t === t && !x.tingMark)) dq = 2; // 现物（报听扣下的那张别人看不到，不算）
     else if (t >= 27) dq = vis[t] >= 3 ? 1 : vis[t] === 2 ? 3 : 6;
     else dq = 6 + ((t % 9) >= 6 && (t % 9) <= 7 ? 1 : 0) - (vis[t] >= 3 ? 4 : 0);
     d = Math.max(d, dq);
@@ -1395,7 +1433,7 @@ const AI = {
 const api = { structB, ukeireTiers, canBaotingAfter, SUITS, HONORS, NUMS, SEAT_NAMES, pts, tname, counts, shanten, shantenNormal, shantenChiitoi, isWin, isWinNormal,
   isSevenPairs, winShape, waitsOf, canWinTile, canTingWith, mulberry32, newRound, remaining, drawTile, visibleCounts, remainingOf,
   selfOptions, claimOptions, applyDiscard, applyPeng, applyMingang, applyAngang, applyBugang, computeScore, settleWin, settleDraw,
-  playRound, evalDiscards, threatsFor, isIsolated, AI, LONG_NAMES, LONG_PTS, isQingyise, isYitiao, longTypes, longTypesC, scoreFor, waitBases, waitWeight, longPlan };
+  playRound, evalDiscards, threatsFor, danger, isIsolated, AI, LONG_NAMES, LONG_PTS, isQingyise, isYitiao, longTypes, longTypesC, scoreFor, waitBases, waitWeight, longPlan };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDD = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1892,7 +1930,7 @@ function exportText(rec, an) {
   if (rec.final) {
     L.push('各家终局（亮牌）:');
     rec.final.players.forEach((pl, i) => {
-      L.push(`${NAMES[i]} 手牌[${groupStr(pl.hand)}] 副露[${pl.melds.map(meldStr).join(' ') || '无'}] 弃牌[${pl.discards.map(x => tn(x.t) + (x.tingMark ? '(报听)' : '') + (x.claimed ? '(被碰杠)' : '')).join(' ')}] 报听:${pl.ting ? '是 听' + listStr(pl.waits) : '否'}`);
+      L.push(`${NAMES[i]} 手牌[${groupStr(pl.hand)}] 副露[${pl.melds.map(meldStr).join(' ') || '无'}] 弃牌[${pl.discards.map(x => tn(x.t) + (x.tingMark ? '(报听扣的牌)' : '') + (x.claimed ? '(被碰杠)' : '')).join(' ')}] 报听:${pl.ting ? '是 听' + listStr(pl.waits) : '否'}`);
     });
   }
   const s = an.summary;
@@ -1954,7 +1992,7 @@ function seenOf(st) {
 function remFromSeen(hand, seen) {
   const v = new Array(34).fill(0);
   for (const t of hand) v[t]++;
-  seen.ponds.forEach(p => p.forEach(d => v[d.t]++));
+  seen.ponds.forEach((p, i) => p.forEach(d => { if (!(d.tm && i !== 0)) v[d.t]++; })); // others' 报听 tile is face down
   seen.melds.forEach(ms => ms.forEach(m => { v[m.tile] += m.type === 'peng' ? 3 : 4; }));
   return v.map(x => Math.max(0, 4 - x));
 }
@@ -2034,7 +2072,7 @@ function safetyTier(t, hand, seen) {
   const reasons = [];
   if (G.pts(t) <= 5) return { tier: 0, why: `${G.pts(t)} 点的牌，别人不能点炮胡（3–5 点只能自摸）` };
   const own = hand.filter(x => x === t).length;
-  const table = seen.ponds.reduce((a, p) => a + p.filter(d => d.t === t).length, 0) + seen.melds.reduce((a, ms) => a + ms.reduce((b, m) => b + (m.tile === t ? (m.type === 'peng' ? 3 : 4) : 0), 0), 0);
+  const table = seen.ponds.reduce((a, p, i) => a + p.filter(d => d.t === t && !(d.tm && i !== 0)).length, 0) + seen.melds.reduce((a, ms) => a + ms.reduce((b, m) => b + (m.tile === t ? (m.type === 'peng' ? 3 : 4) : 0), 0), 0);
   let tier = 0;
   const threats = seen.ting.map((x, i) => x ? i : -1).filter(i => i > 0);
   for (const q of threats) {
@@ -2042,7 +2080,7 @@ function safetyTier(t, hand, seen) {
     let tq, why;
     if (pond.some(d => d.t === t && d.at)) { tq = 0; why = `${NAMES[q]} 报听后自己摸到又打掉过，不是他要的牌`; }
     else if (t >= 27 && table + own >= 4) { tq = 0; why = '四张都已见，字牌不可能听'; }
-    else if (pond.some(d => d.t === t)) { tq = 1; why = `${NAMES[q]} 打过的现物（扣点点没有振听，不是绝对安全）`; }
+    else if (pond.some(d => d.t === t && !d.tm)) { tq = 1; why = `${NAMES[q]} 打过的现物（扣点点没有振听，不是绝对安全）`; }
     else if (t >= 27 && table + own === 3) { tq = 1; why = '字牌已见 3 张，只可能单钓'; }
     else if (t >= 27 && table + own === 2) { tq = 2; why = '字牌已见 2 张'; }
     else if (t < 27 && table + own >= 3) { tq = 2; why = `已见 ${table + own} 张，${NAMES[q]} 能用它的组合变少`; }
@@ -2077,7 +2115,7 @@ async function genFangshou(rng) {
     const threats = G.threatsFor(s, 0).map(q => ({ p: q, waits: s.players[q].waits.slice() }));
     // the "safest" answer must also be truly safe (no 振听 rule: a 现物 can still be a winning tile)
     if (ans.some(t => threats.some(x => x.waits.includes(t) && G.pts(t) >= 6))) return null;
-    return { id: mkId('fangshou', rng), type: 'fangshou', hand: sorted(hand), drawn: null, melds: me.melds.map(m => ({ type: m.type, tile: m.tile })), seen, threats, rows, answer: ans };
+    return { id: mkId('fangshou', rng), type: 'fangshou', v16: 1, hand: sorted(hand), drawn: null, melds: me.melds.map(m => ({ type: m.type, tile: m.tile })), seen, threats, rows, answer: ans };
   }, 60);
 }
 function payFor(sc) {
@@ -2193,11 +2231,19 @@ function checkAnswer(q, ans) {
     return { correct: wOk && tOk, wOk, tOk };
   }
   if (q.type === 'suanfen') return { correct: ans === q.answer };
-  if (q.type === 'xiaolv') normQ(q);
+  if (q.type === 'xiaolv' || q.type === 'fangshou') normQ(q);
   return { correct: q.answer.includes(ans) };
 }
 /* 牌效题 saved under an older ranking (错题本) are re-graded with the current rule */
-function normQ(q) { if (q && q.type === 'xiaolv' && q.rows && q.rows.length) q.answer = effAnswer(q.rows); return q; }
+function normQ(q) {
+  if (q && q.type === 'xiaolv' && q.rows && q.rows.length) q.answer = effAnswer(q.rows);
+  /* 防守题 saved before the 报听 tile was face down: re-grade without peeking at it */
+  if (q && q.type === 'fangshou' && q.rows && q.rows.length && q.seen && !q.v16) {
+    q.rows = q.rows.map(r => Object.assign({}, r, safetyTier(r.tile, q.hand, q.seen)));
+    const minT = Math.min(...q.rows.map(r => r.tier)); q.answer = q.rows.filter(r => r.tier === minT).map(r => r.tile); q.v16 = 1;
+  }
+  return q;
+}
 
 const api = { routeInfo, routesFor, routeNote, routeScore, stepStr, qiduiS, yitiaoS, ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
   exportText, handStats, aggregate, genQuestion, checkAnswer, safetyTier, remFromSeen, payFor, tingRows, bestTing, waitClass, simCapture, setYield, seenOf };
@@ -2364,21 +2410,91 @@ const CN_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 const SAY_HONOR = ['东风', '南风', '西风', '北风', '红中', '发财', '白板'];
 const sayTile = t => t < 27 ? CN_NUM[t % 9] + ['万', '筒', '条'][(t / 9) | 0] : SAY_HONOR[t - 27];
 const Voice = {
-  ss: null, voice: null, primed: false, calls: 0, deferred: null,
+  ss: null, voice: null, auto: null, primed: false, calls: 0, deferred: null, voices: [], bad: new Set(), errRun: 0, onChange: null,
+  RATES: { slow: 0.9, normal: 1.1, fast: 1.3 },
+  get rate() { return this.RATES[store.get('kdd_voice_rate', 'normal')] || 1.1; },
+  get saved() { return store.get('kdd_voice_name', ''); },
   init() {
     try { this.ss = window.speechSynthesis || null; if (!this.ss || !window.SpeechSynthesisUtterance) { this.ss = null; return; } } catch (e) { this.ss = null; return; }
-    const pick = () => { try {
-      const vs = this.ss.getVoices() || [], norm = v => String(v.lang || '').replace('_', '-').toLowerCase();
-      this.voice = vs.find(v => norm(v) === 'zh-cn' && v.localService) || vs.find(v => norm(v) === 'zh-cn') || vs.find(v => /^cmn/.test(norm(v)))
-        || vs.find(v => /^zh-(hans|sg)/.test(norm(v))) || vs.find(v => norm(v) === 'zh-tw') || null;
-    } catch (e) {} };
-    pick();
-    try { if (this.ss.addEventListener) this.ss.addEventListener('voiceschanged', pick); else this.ss.onvoiceschanged = pick; } catch (e) {}
+    this.pick();
+    const h = () => { this.pick(); if (this.onChange) try { this.onChange(); } catch (e) {} };
+    try { if (this.ss.addEventListener) this.ss.addEventListener('voiceschanged', h); else this.ss.onvoiceschanged = h; } catch (e) {}
   },
-  utter(text) {
+  lang(v) { return String(v && v.lang || '').replace(/_/g, '-').toLowerCase(); },
+  /* language group: 0 = mainland Mandarin (zh-CN), 1 = other Simplified/Mandarin (zh-Hans, cmn, zh-SG), 2 = Taiwan Mandarin, 3 = Cantonese (last resort) */
+  group(v) {
+    const l = this.lang(v), n = String(v.name || '');
+    if (/^(zh-hk|yue)/.test(l) || /粤|粵|cantonese|sin-?ji/i.test(n)) return 3;
+    if (l === 'zh-cn' || /^(zh-hans-cn|cmn-hans-cn|cmn-cn)$/.test(l)) return 0;
+    if (/^(zh-hans|cmn|zh-sg)/.test(l)) return 1;
+    if (/^(zh-tw|zh-hant|zh-mo)/.test(l)) return 2;
+    if (l === 'zh') return 1;
+    return -1;
+  },
+  /* how natural the voice is likely to sound: 3 neural/online (Edge), 2 Google network / Apple enhanced·premium·Siri-era, 1 ordinary local, 0 known robotic */
+  quality(v) {
+    const n = String(v.name || '');
+    if (/natural|neural|online|自然/i.test(n) || /microsoft\s+(xiao|yun)/i.test(n)) return 3;
+    if (/google|enhanced|premium|优化|高级|增强|siri|lilian|yu-?shu|li-?mu|meijia/i.test(n)) return 2;
+    if (/^(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/i.test(n.trim())) return -1;
+    if (/^ting-?ting$|^mei-jia$|huihui|kangkang|yaoyao|hanhan|zhiwei|espeak/i.test(n.trim())) return 0;
+    return 1;
+  },
+  /* every usable Chinese voice on this device, best first */
+  list() {
+    let vs = []; try { vs = (this.ss && this.ss.getVoices()) || []; } catch (e) {}
+    const seen = new Set(), out = [];
+    vs.forEach((v, i) => { if (!v || seen.has(v.name)) return; const g = this.group(v); if (g < 0) return; seen.add(v.name); out.push({ v, g, q: this.quality(v), i }); });
+    out.sort((a, b) => a.g - b.g || b.q - a.q || a.i - b.i);
+    return out.map(x => x.v);
+  },
+  pick() { try {
+    this.voices = this.list();
+    const ok = this.voices.filter(v => !this.bad.has(v.name));
+    this.auto = ok[0] || null;
+    const s = this.saved, mine = s && ok.find(v => v.name === s);
+    this.voice = mine || this.auto;
+  } catch (e) {} },
+  friendly(v) {
+    let n = String(v.name || '');
+    n = n.replace(/^Microsoft\s+/i, '').replace(/\s*Online\s*/i, ' ').replace(/\s*\((Natural|Neural)\)\s*/ig, ' ').replace(/\s+-\s+Chinese.*$/i, '').replace(/\s*[（(][^()（）]*(中文|Chinese)[^()]*[)）]\s*$/i, '')
+      .replace(/\s*[（(](中国大陆|中國大陸|臺灣|台湾|香港|China|Taiwan|Hong Kong)[)）]\s*/ig, ' ').replace(/\s*\((Enhanced|Premium|增强|优化|高级)\)\s*/ig, ' ')
+      .replace(/^Google\s+國語/, 'Google 国语').replace(/^Google\s+粤語/, 'Google 粤语').replace(/\s+/g, ' ').trim();
+    const CN = { tingting: '婷婷', 'ting-ting': '婷婷', meijia: '美佳', 'mei-jia': '美佳', sinji: '善怡', 'sin-ji': '善怡', xiaoxiao: '晓晓', yunxi: '云希', xiaoyi: '晓伊', yunjian: '云健', yunyang: '云扬', yunxia: '云夏', huihui: '慧慧', kangkang: '康康', yaoyao: '瑶瑶', lilian: '莉莲', 'yu-shu': '语舒', 'li-mu': '立木' };
+    const k = n.toLowerCase(); if (CN[k]) n = CN[k] + ' ' + n;
+    return n || String(v.name || '中文');
+  },
+  tags(v) {
+    const t = [], g = this.group(v), q = this.quality(v), n = String(v.name || '');
+    t.push(['普通话', '普通话', '台湾国语', '粤语'][g] || '中文');
+    if (q === 3) t.push('自然'); else if (/enhanced|premium|增强|优化|高级/i.test(n)) t.push('增强'); else if (q === 2) t.push('较自然');
+    if (v.localService === false) t.push('联网');
+    return t;
+  },
+  setChoice(name) { store.set('kdd_voice_name', name || ''); if (name) this.bad.delete(name); this.errRun = 0; this.pick(); },
+  setRate(k) { store.set('kdd_voice_rate', this.RATES[k] ? k : 'normal'); },
+  /* a voice that errors twice in a row (not just being cut off) is skipped for this session */
+  watch(u, v) {
+    u.onerror = e => {
+      const er = e && e.error;
+      if (v && er !== 'interrupted' && er !== 'canceled' && er !== 'not-allowed' && this.voice === v) {
+        if (++this.errRun >= 2) { this.bad.add(v.name); this.errRun = 0; this.pick(); }
+      }
+      if (u.__err) u.__err(e);
+    };
+    u.onend = e => { if (this.voice === v) this.errRun = 0; if (u.__end) u.__end(e); };
+  },
+  utter(text, v) {
+    if (!this.voice && this.ss) this.pick();
+    v = v || this.voice;
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = this.voice ? this.voice.lang : 'zh-CN'; if (this.voice) u.voice = this.voice;
-    u.rate = 1.1; u.pitch = 1; u.volume = 1; return u;
+    u.lang = v ? v.lang : 'zh-CN'; if (v) u.voice = v;
+    u.rate = this.rate; u.pitch = 1; u.volume = 1; this.watch(u, v); return u;
+  },
+  /* 试听 in the picker: always audible, even when 语音报牌 is off */
+  preview(v, text) {
+    if (!this.ss) return false;
+    try { this.calls = 0; this.deferred = null; this.ss.cancel(); this.ss.speak(this.utter(text || '三万，碰', v || this.auto)); return true; } catch (e) { return false; }
   },
   /* iOS only lets speech start from a user gesture: speak a silent blank once on the first tap */
   prime() {
@@ -2398,7 +2514,7 @@ const Voice = {
     try {
       const u = this.utter(text); let done = false;
       const fin = () => { if (done) return; done = true; this.calls = Math.max(0, this.calls - 1); if (!this.calls && this.deferred) { const d = this.deferred; this.deferred = null; if (voiceOn) try { this.ss.speak(this.utter(d)); } catch (e) {} } };
-      u.onend = fin; u.onerror = fin; setTimeout(fin, 3000);
+      u.__end = fin; u.__err = fin; setTimeout(fin, 3000);
       this.calls++; this.ss.speak(u);
     } catch (e) {}
   },
@@ -2498,7 +2614,10 @@ function render() {
       if (d.claimed) return '';
       const last = st.lastDiscard && st.lastDiscard.p === i && st.lastDiscard.idx === k && !st.result;
       const claimable = last && pending && pending.kind === 'claim';
-      const th = tileHTML(d.t, 'sm', (last ? 'last ' : '') + (claimable ? 'claimable ' : '') + (d.tingMark ? 'tingmark' : ''));
+      /* 报听那张扣着打：别人的显示牌背（本局结束才翻开），自己的那张只有你看得到（半透明 + 虚线框） */
+      const th = d.tingMark && i !== 0 && !st.result ? `<div class="tile sm facedown tingmark kou ${last ? 'last' : ''}" title="${NAMES[i]} 报听扣下的牌（看不到）"></div>`
+        : tileHTML(d.t, 'sm', (last ? 'last ' : '') + (claimable ? 'claimable ' : '') + (d.tingMark ? 'tingmark kou ' + (i === 0 ? 'mine' : 'open') : ''),
+          d.tingMark ? `data-kou="${i === 0 ? '你报听扣下的牌（只有你看得到）' : '报听扣的牌（本局结束翻开）'}"` : '');
       if (!side) return th;
       const r = n % 6, col = Math.floor(n / 6) + 1; n++;
       return `<div class="pcell" style="grid-row:${i === 3 ? r + 1 : 6 - r};grid-column:${col}">${th}</div>`;
@@ -2760,7 +2879,7 @@ const hooks = {
     if (e.type === 'discard') {
       const src = e.p === 0 ? lastSrc : rectOf($('seat' + e.p).querySelector('.backs .back:last-child') || $('seat' + e.p));
       lastSrc = null;
-      render(); fly(lastPondTile(e.p), src, e.p === 0 ? 1.6 : 0.7); Snd.clack(); Voice.tile(e.t);
+      render(); fly(lastPondTile(e.p), src, e.p === 0 ? 1.6 : 0.7); Snd.clack(); if (!e.ting) Voice.tile(e.t); // 报听那张是扣着打的，不念牌名
       if (e.ting) { stampAt(plateEl(e.p), '听', 'ting'); Snd.chime('ting'); Voice.call('听'); }
       await sleep(e.p === 0 ? 260 : (e.ting ? 900 : 400)); return;
     }
@@ -2856,10 +2975,23 @@ function toast(text) {
   const d = document.createElement('div'); d.className = 'toast'; d.textContent = text; $('fx').appendChild(d);
   setTimeout(() => d.remove(), 1400);
 }
+function setVoiceOn(on, quiet) {
+  voiceOn = on; store.set('kdd_voice', voiceOn ? '1' : '0'); syncToggles();
+  if (voiceOn) { Voice.primed = false; Voice.prime(); if (!quiet) Voice.call('语音报牌'); } else Voice.stop();
+}
+const COARSE = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+/* tap = on/off as before; long-press (phone) or right-click (computer) = 选声音 */
+let vbHold = null, vbLong = false;
+$('voiceBtn').addEventListener('pointerdown', e => {
+  if (e.button > 0) return; vbLong = false; clearTimeout(vbHold);
+  vbHold = setTimeout(() => { vbLong = true; buzz(20); showVoicePicker(); }, 550);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('voiceBtn').addEventListener(ev, () => clearTimeout(vbHold)));
+$('voiceBtn').addEventListener('contextmenu', e => { e.preventDefault(); clearTimeout(vbHold); if (!vbLong) showVoicePicker(); vbLong = true; setTimeout(() => { vbLong = false; }, 400); });
 $('voiceBtn').addEventListener('click', () => {
-  voiceOn = !voiceOn; store.set('kdd_voice', voiceOn ? '1' : '0'); syncToggles();
-  if (voiceOn) { Voice.primed = false; Voice.prime(); Voice.call('语音报牌'); } else Voice.stop();
-  toast(voiceOn ? '语音报牌：开' : '语音报牌：关');
+  if (vbLong) { vbLong = false; return; }
+  setVoiceOn(!voiceOn);
+  toast(voiceOn ? `语音报牌：开 · ${COARSE ? '长按' : '右键'}可选声音` : '语音报牌：关');
 });
 $('rulesBtn').addEventListener('click', showRules);
 syncToggles();
@@ -2920,18 +3052,58 @@ document.addEventListener('pointerdown', () => Snd.ensure(), { once: true });
 ['pointerdown', 'touchend', 'click'].forEach(ev => document.addEventListener(ev, () => Voice.prime(), { once: true, capture: true }));
 
 /* ---------------- modals ---------------- */
-function showModal(html) { $('modalbox').innerHTML = html; $('modal').classList.remove('hidden'); }
+function showModal(html) { Voice.onChange = null; $('modalbox').innerHTML = html; $('modal').classList.remove('hidden'); }
 function hideModal() { $('modal').classList.add('hidden'); }
+/* ---------------- 选声音 ---------------- */
+function showVoicePicker(onClose) {
+  const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const close = () => { Voice.onChange = null; hideModal(); if (onClose) onClose(); };
+  const paint = () => {
+    Voice.pick();
+    const vs = Voice.voices, saved = Voice.saved, savedOk = saved && vs.some(v => v.name === saved && !Voice.bad.has(v.name));
+    const cur = savedOk ? saved : '', rk = store.get('kdd_voice_rate', 'normal');
+    const row = (name, title, sub, tags) => `<div class="vopt ${cur === name ? 'sel' : ''}" data-vname="${esc(name)}" role="radio" aria-checked="${cur === name}" tabindex="0"><span class="rad"></span>` +
+      `<span class="vnm"><b>${title}</b>${tags ? `<span class="vtags">${tags}</span>` : ''}${sub ? `<small>${sub}</small>` : ''}</span><button class="vtry" data-try="${esc(name)}">▶ 试听</button></div>`;
+    const autoV = Voice.auto;
+    let list;
+    if (!Voice.ss) list = `<div class="vnote">这个浏览器不支持语音朗读，语音报牌用不了。</div>`;
+    else {
+      list = row('', '自动（推荐）', autoV ? `现在用：${esc(Voice.friendly(autoV))}` : '用系统默认的中文声音', '') +
+        vs.map(v => row(v.name, esc(Voice.friendly(v)), '', Voice.tags(v).map(t => `<i>${t}</i>`).join('') + (autoV && v.name === autoV.name ? '<i class="rec">推荐</i>' : '') + (Voice.bad.has(v.name) ? '<i class="bad">出错，已跳过</i>' : ''))).join('');
+      if (!vs.length) list += `<div class="vnote">声音还在加载，或这台设备没有中文声音；自动会用系统默认的中文朗读。</div>`;
+      if (saved && !savedOk) list += `<div class="vnote">之前选的「${esc(saved)}」在这台设备上用不了，现在用自动。</div>`;
+    }
+    showModal(`<button class="mclose" id="vpClose" aria-label="关闭">✕</button><div class="mhead"><div class="mtitle" style="font-size:26px">选声音</div><div class="msub">语音报牌用哪个声音念牌，点「试听」先听一下</div></div>
+      <div class="vctl"><button class="vsw ${voiceOn ? 'on' : ''}" id="vpOn"><span class="knob"></span>语音报牌：${voiceOn ? '开' : '关'}</button>
+      <span class="vrate"><span class="lb">语速</span>${[['slow', '慢'], ['normal', '正常'], ['fast', '快']].map(([k, t]) => `<button class="${rk === k ? 'on' : ''}" data-rate="${k}">${t}</button>`).join('')}</span></div>
+      <div class="vlist" id="vpList">${list}</div>
+      <div class="mfoot"><button class="gbtn" id="vpDone">完成</button></div>`);
+    const box = $('modalbox'), keep = box.__vscroll || 0; $('vpList').scrollTop = keep;
+    $('vpList').onscroll = () => { box.__vscroll = $('vpList').scrollTop; };
+    $('vpClose').onclick = close; $('vpDone').onclick = close;
+    $('vpOn').onclick = () => { setVoiceOn(!voiceOn, true); paint(); };
+    box.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { Voice.setRate(b.dataset.rate); Voice.preview(Voice.voice); paint(); });
+    box.querySelectorAll('.vtry').forEach(b => b.onclick = e => { e.stopPropagation(); const n = b.dataset.try; Voice.preview(n ? Voice.voices.find(v => v.name === n) : Voice.auto); });
+    box.querySelectorAll('.vopt').forEach(o => {
+      const choose = () => { const n = o.dataset.vname; Voice.setChoice(n); Voice.preview(Voice.voice); paint(); };
+      o.onclick = choose; o.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); choose(); } };
+    });
+    Voice.onChange = () => { if (!$('modal').classList.contains('hidden') && $('vpList')) paint(); };
+  };
+  $('modalbox').__vscroll = 0;
+  paint();
+}
+
 function showRules() {
   showModal(`<button class="mclose" id="closeRules" aria-label="关闭">✕</button><div class="mhead"><div class="mtitle" style="font-size:30px">扣点点 规则</div></div><div class="rules">
   <h3>牌与动作</h3><ul><li>136 张：万、筒、条 1–9 各 4 张，东南西北中發白各 4 张，没有花牌。</li><li>可以碰、杠（明杠 / 暗杠 / 补杠），<b>不能吃</b>；杠后从牌墙尾补一张。</li><li>胡牌：4 组顺子/刻子 + 1 对将，或七对（四张一样的算两对）。</li></ul>
-  <h3>报听与点数</h3><ul><li><b>必须报听才能胡</b>；报听后手牌锁定，只能打出摸到的牌。</li><li>数字牌按面值算点，字牌 10 点；听口里要有 6 点以上的牌才能报听。</li><li>1–2 点不能胡；3–5 点只能自摸；6 点以上自摸、点炮都能胡。</li></ul>
+  <h3>报听与点数</h3><ul><li><b>必须报听才能胡</b>；报听后手牌锁定，只能打出摸到的牌。</li><li>报听时打的那张要<b>扣着打</b>（牌背朝上）：别人看不到是什么牌，也<b>不能碰、杠、胡</b>这张；本局结束后才翻开。你自己扣的那张只有你看得到（半透明、虚线框）。</li><li>数字牌按面值算点，字牌 10 点；听口里要有 6 点以上的牌才能报听。</li><li>1–2 点不能胡；3–5 点只能自摸；6 点以上自摸、点炮都能胡。</li></ul>
   <h3>算分</h3><ul><li>得分 = 底分（没有龙时 = 胡的那张牌的点数；有龙时 = 每种龙 20）；自摸 ×2；每个暗杠再 ×2。</li><li>自摸：三家各付一份。点炮：没报听的人点炮 → 一个人包三家；已报听的人点炮 → 三家各付一份。</li><li>不带耗子、不带庄分；牌墙摸完没人胡算流局，庄家没胡就轮庄。</li></ul>
   <h3>龙（加分牌型）</h3><ul><li><b>青龙</b>：清一色，整手牌连副露都是同一门数字牌，没有字牌，什么牌型都行。</li><li><b>七对龙</b>：七对胡牌，只能门清；四张一样的算两对。</li><li><b>一条龙</b>：普通牌型里有同一门的 123、456、789 三组顺子（门清，不能吃）。</li><li>每种龙底分 <b>20</b>，可以叠加：青龙 + 七对龙 = 40，青龙 + 一条龙 = 40（七对龙和一条龙不会同时出现）。有龙时<b>底分代替胡牌那张的点数</b>，再算自摸 ×2、暗杠 ×2。</li><li>注意：<b>能不能胡仍然看胡的那张牌</b>——要报听、听口要有 6 点以上才能报听；胡 1–2 点的牌不能胡，3–5 点只能自摸，6 点以上才能点炮胡，有龙也一样。</li><li>例：青龙 20 + 七对龙 20 = 40 × 自摸 2 = 80 分，三家各付 80。</li></ul>
   <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数（离听牌越近越好）。离听牌还差 2 步以上时，先比<b>总进张</b>，牌越宽越好，总进张一样再比好进张；只差 1 步（一向听）时，先比<b class="ukg">好进张</b>，好进张一样再比总进张。都一样时才看孤张字牌、点数等小细节。</li></ul>
-  <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>右上角的对话气泡按钮是「语音报牌」：开着时会念出每张打出的牌，以及碰、杠、听、胡、自摸；和音效按钮分开控制。</li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li><li>电脑：鼠标点选、再点打出；键盘 <b>← →</b> 选牌，<b>Enter</b> 或 <b>↑</b> 打出，<b>空格</b> 过，<b>H</b> 胡 · <b>P</b> 碰 · <b>G</b> 杠 · <b>T</b> 听，<b>Esc</b> 取消，<b>F</b> 全屏。</li></ul></div>
+  <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>右上角的对话气泡按钮是「语音报牌」：点一下开 / 关，开着时会念出每张打出的牌，以及碰、杠、听、胡、自摸；和音效按钮分开控制。<b>长按</b>（电脑上点<b>右键</b>）这个按钮可以<b>选声音</b>和语速，大厅右上角的「语音」也能进；默认自动挑这台设备上最自然的中文声音。<button class="lnk" id="rulesVoice">选声音 ›</button></li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li><li>电脑：鼠标点选、再点打出；键盘 <b>← →</b> 选牌，<b>Enter</b> 或 <b>↑</b> 打出，<b>空格</b> 过，<b>H</b> 胡 · <b>P</b> 碰 · <b>G</b> 杠 · <b>T</b> 听，<b>Esc</b> 取消，<b>F</b> 全屏。</li></ul></div>
   <div class="mfoot"><button class="gbtn" id="closeRules2">知道了</button></div>`);
-  $('closeRules').onclick = hideModal; $('closeRules2').onclick = hideModal;
+  $('closeRules').onclick = hideModal; $('closeRules2').onclick = hideModal; $('rulesVoice').onclick = () => showVoicePicker(showRules);
 }
 function paysHTML(r) {
   return `<div class="pays">${[0, 1, 2, 3].map(i => { const v = r.pay[i];
@@ -2998,7 +3170,7 @@ async function startRound() {
   showResult(r, rec, an);
 }
 window.__kdd = { get st() { return st; }, get pending() { return pending; }, Voice, sayTile, render, startRound, tileHTML, backHTML };
-window.KDDUI = { tileHTML, ukTilesHTML, routesHTML, backHTML, meldHTML, Snd, showModal, hideModal, startRound, render,
+window.KDDUI = { showVoicePicker, tileHTML, ukTilesHTML, routesHTML, backHTML, meldHTML, Snd, showModal, hideModal, startRound, render,
   get busy() { return busy; }, get st() { return st; }, get lastRec() { return lastRec; } };
 if (!window.KDDT || /[?&](seed=|play)/.test(location.search)) startRound();
 })();
@@ -3065,7 +3237,10 @@ function pondsHTML(seen, opt) {
   opt = opt || {};
   return `<div class="ponds">${[3, 2, 1, 0].map(i => {
     const ting = seen.ting[i], thr = opt.threat && ting && i > 0, pond = seen.ponds[i];
-    const ds = pond.map((d, k) => tl(d.t, 'tp', (d.tm ? 'tingmark ' : '') + (d.at ? 'aft ' : '') + (opt.last === i && k === pond.length - 1 ? 'hl' : ''))).join('');
+    /* 报听那张扣着：别人的显示牌背；复盘（opt.reveal）时翻开，标成「报听扣的牌」；自己的那张始终看得到 */
+    const ds = pond.map((d, k) => { const hl = opt.last === i && k === pond.length - 1 ? 'hl' : '';
+      if (d.tm && i > 0 && !opt.reveal) return `<div class="tile tp facedown tingmark kou ${hl}" title="${NAMES[i]} 报听扣下的牌（看不到）"></div>`;
+      return tl(d.t, 'tp', (d.tm ? `tingmark kou ${i > 0 ? 'open' : 'mine'} ` : '') + (d.at ? 'aft ' : '') + hl, d.tm ? `data-kou="${i > 0 ? '报听扣的牌' : '你报听扣的牌'}"` : ''); }).join('');
     const ms = seen.melds[i].map(m => meldGroup(m, 'tp')).join('');
     return `<div class="prow ${thr ? 'threat' : ''} ${i === 0 ? 'me' : ''}"><span class="pl">${NAMES[i] === 'Kevin' ? '你' : NAMES[i]}${i === seen.dealer ? '<i class="zh">庄</i>' : ''}${ting ? '<b class="tingb">听</b>' : ''}</span>` +
       `${ms ? `<span class="pm">${ms}</span>` : ''}<span class="pd">${ds || '<em class="none">（还没出牌）</em>'}</span></div>`;
@@ -3102,7 +3277,8 @@ const MICON = {
   review: SVG('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>'),
   play: SVG('<path d="M7 4.5v15l12-7.5z" fill="currentColor" stroke="none"/>'),
   rules: SVG('<path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h6M8 11h6"/>'),
-  sound: SVG('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/>')
+  sound: SVG('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/>'),
+  voice: SVG('<path d="M4 5h13a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7l-4 4v-4H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M6 9h9M6 12h6"/>')
 };
 const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 function daily() { const x = LS.get('kdd_daily', null); return x && x.d === todayKey() ? x : { d: todayKey(), n: 0, c: 0 }; }
@@ -3117,7 +3293,7 @@ function showMenu() {
   const fan = [31, 0, 9].map((t, i) => `<span class="fant f${i}">${tl(t, 'ti')}</span>`).join('');
   paint(`<div class="lobby">
     <div class="lb-top"><div class="me-chip"><span class="avatar av0">K</span><span class="mi"><b>Kevin</b><small>${hs.length ? `已打 ${hs.length} 局 · 累计 <em class="${vcls(net)}">${sgn(net)}</em>` : '新手 · 欢迎来到牌桌'}</small></span></div>
-      <div class="sp"></div><button class="tback" data-act="rules">${MICON.rules}<span>规则</span></button></div>
+      <div class="sp"></div><button class="tback" data-act="voice">${MICON.voice}<span>语音</span></button><button class="tback" data-act="rules">${MICON.rules}<span>规则</span></button></div>
     <div class="lb-main">
       <div class="lb-hero">
         <div class="logo"><div class="fan">${fan}</div><div class="ltitle">扣点点</div><div class="lsub"><i></i>山西麻将 · 训练版<i></i></div></div>
@@ -3320,7 +3496,7 @@ function renderDrill() {
   } else if (q.type === 'fangshou') {
     const th = q.threats.map(x => NAMES[x.p]).join('、');
     prompt = `<b class="warn">${th} 已报听！</b>打哪张<b>最安全</b>？`;
-    board = pondsHTML(q.seen, { threat: true }) + `<div class="legend">${tl(q.seen.ponds[q.threats[0].p][0] ? q.seen.ponds[q.threats[0].p][0].t : 27, 'tp', 'tingmark')} 报听那张　<span class="aftbox"></span> 报听后打出的牌</div>`;
+    board = pondsHTML(q.seen, { threat: true }) + `<div class="legend"><span class="tile tp facedown tingmark kou lg"></span> 报听扣的牌（扣着，看不到）　<span class="aftbox"></span> 报听后打出的牌</div>`;
     const by = {}; q.rows.forEach(r => { by[r.tile] = r; });
     const opt = { melds: q.melds, act: done ? null : 'pick', selT: done ? null : s.selT, selK: done ? null : s.selK };
     if (done) { opt.badges = {}; opt.marks = {}; q.rows.forEach(r => { opt.badges[r.tile] = { txt: TIERL[r.tier], cls: 't' + r.tier }; }); q.answer.forEach(t => { opt.marks[t] = 'ans'; }); if (!s.res.correct) opt.marks[s.ans] = 'wrong'; }
@@ -3526,7 +3702,7 @@ function renderReview() {
     `<div class="rnav"><button class="nbtn" data-act="revPrev" ${pos <= 0 ? 'disabled' : ''} aria-label="上一手">‹</button><span class="rpos"><b>${pos + 1}</b>/${list.length}</span><button class="nbtn pri" data-act="revNext" ${pos >= list.length - 1 ? 'disabled' : ''} aria-label="下一手">›</button></div>` +
     `<button class="gbtn sm ghost" data-act="export">导出</button>`;
   paint(head(`复盘 · 第${rec.roundNo}局`, 'revBack', nav) +
-    `<div class="tr-body fit"><div class="rv">${sum}<div class="board">${pondsHTML(seen, { threat: true, last: lastP })}<div class="wleft">第 ${it.xun} 巡 · 牌墙还剩 ${seen.left} 张${sn.players[0].ting ? ' · 你已报听' : ''}</div></div>` +
+    `<div class="tr-body fit"><div class="rv">${sum}<div class="board">${pondsHTML(seen, { threat: true, last: lastP, reveal: true })}<div class="wleft">第 ${it.xun} 巡 · 牌墙还剩 ${seen.left} 张${sn.players[0].ting ? ' · 你已报听' : ''}${seen.ponds.some((p, i) => i > 0 && p.some(d => d.tm)) ? ' · <span class="koulg">虚线框 = 报听扣的牌（当时扣着看不到，复盘翻开）</span>' : ''}</div></div>` +
     `<div class="side panel"><div class="sbody">${side}</div></div><div class="handrow">${hand}</div></div></div>`);
 }
 
@@ -3558,6 +3734,7 @@ const ACT = {
   menu: showMenu, drills: showDrillMenu, wrong: showWrong, stats: showStats,
   play() { close(); if (!U.busy && $('modal').classList.contains('hidden')) U.startRound(); },
   rules() { close(); document.getElementById('rulesBtn').click(); },
+  voice() { if (U.showVoicePicker) U.showVoicePicker(); },
   startDrill(b) { startDrill(b.dataset.type); },
   pick(b) {
     const t = +b.dataset.t, k = +b.dataset.k;
