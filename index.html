@@ -2887,6 +2887,7 @@ const SAY_HONOR = ['东风', '南风', '西风', '北风', '红中', '发财', '
 const sayTile = t => t < 27 ? CN_NUM[t % 9] + ['万', '筒', '条'][(t / 9) | 0] : SAY_HONOR[t - 27];
 const Voice = {
   ss: null, voice: null, auto: null, primed: false, calls: 0, deferred: null, voices: [], bad: new Set(), errRun: 0, onChange: null,
+  live: new Set(), act: 0, WD_MS: 2500, stuckN: 0,
   RATES: { slow: 0.9, normal: 1.1, fast: 1.3 },
   get rate() { return this.RATES[store.get('kdd_voice_rate', 'normal')] || 1.1; },
   get saved() { return store.get('kdd_voice_name', ''); },
@@ -2951,15 +2952,49 @@ const Voice = {
   setRate(k) { store.set('kdd_voice_rate', this.RATES[k] ? k : 'normal'); },
   /* a voice that errors twice in a row (not just being cut off) is skipped for this session */
   watch(u, v) {
+    u.__v = v;
+    u.onstart = () => { u.__started = true; this.act = Date.now(); this.stuckN = 0; };
     u.onerror = e => {
       const er = e && e.error;
+      this.settle(u, er !== 'interrupted' && er !== 'canceled'); // being cut off is not a sign of life
       if (v && er !== 'interrupted' && er !== 'canceled' && er !== 'not-allowed' && this.voice === v) {
         if (++this.errRun >= 2) { this.bad.add(v.name); this.errRun = 0; this.pick(); }
       }
       if (u.__err) u.__err(e);
     };
-    u.onend = e => { if (this.voice === v) this.errRun = 0; if (u.__end) u.__end(e); };
+    u.onend = e => { this.settle(u); this.stuckN = 0; if (this.voice === v) this.errRun = 0; if (u.__end) u.__end(e); };
   },
+  settle(u, alive = true) { u.__done = true; if (alive) this.act = Date.now(); clearTimeout(u.__wd); this.live.delete(u); },
+  /* every utterance goes through here (v21):
+     - keep a reference until it ends (Chrome drops events of garbage-collected utterances);
+     - resume() a paused engine (Chrome can leave speechSynthesis paused, then everything queues silently);
+     - watchdog: if nothing starts within WD_MS while the engine is idle (Chrome's network "Google" voices go silent
+       without any error when their server can't be reached, or the queue hangs after cancel), clear the stuck queue,
+       skip that voice for this session and say it again with the next voice (local voice or the system default). */
+  say(u) {
+    const ss = this.ss; if (!ss) return;
+    try { if (ss.paused) ss.resume(); } catch (e) {}
+    this.live.add(u);
+    clearTimeout(u.__wd);
+    u.__wd = setTimeout(() => this.check(u), this.WD_MS);
+    ss.speak(u);
+  },
+  check(u) {
+    if (u.__done || u.__started || !this.live.has(u)) return;
+    if (Date.now() - this.act < this.WD_MS - 100) { u.__wd = setTimeout(() => this.check(u), this.WD_MS); return; } // something else is still talking
+    this.live.delete(u); u.__done = true; this.stuckN++;
+    try { this.ss.cancel(); if (this.ss.resume) this.ss.resume(); } catch (e) {}
+    const v = u.__v;
+    if (v && (v.localService === false || this.stuckN >= 2)) { this.bad.add(v.name); this.errRun = 0; this.pick(); if (this.onChange) try { this.onChange(); } catch (e) {} }
+    if (!u.__retry && u.text.trim() && this.stuckN <= 3) {
+      const nv = this.voice && (!v || this.voice.name !== v.name) ? this.voice : null; // next voice; none left -> system default for zh-CN
+      const u2 = this.utter(u.text, nv); if (!nv) { u2.voice = null; u2.lang = 'zh-CN'; u2.__v = null; }
+      u2.__retry = true; u2.volume = u.volume; u2.__end = u.__end; u2.__err = u.__err;
+      try { this.say(u2); } catch (e) { if (u.__err) u.__err({ error: 'stuck' }); }
+    } else if (u.__err) u.__err({ error: 'stuck' });
+  },
+  /* cancel only when something is actually speaking/queued: on Chrome, cancel() on an idle engine right before speak() can swallow that utterance */
+  cut() { const ss = this.ss; try { if (ss.speaking === undefined || ss.speaking || ss.pending) ss.cancel(); } catch (e) {} },
   utter(text, v) {
     if (!this.voice && this.ss) this.pick();
     v = v || this.voice;
@@ -2970,31 +3005,31 @@ const Voice = {
   /* 试听 in the picker: always audible, even when 语音报牌 is off */
   preview(v, text) {
     if (!this.ss) return false;
-    try { this.calls = 0; this.deferred = null; this.ss.cancel(); this.ss.speak(this.utter(text || '三万，碰', v || this.auto)); return true; } catch (e) { return false; }
+    try { this.calls = 0; this.deferred = null; this.cut(); this.say(this.utter(text || '三万，碰', v || this.auto)); return true; } catch (e) { return false; }
   },
   /* iOS only lets speech start from a user gesture: speak a silent blank once on the first tap */
   prime() {
     if (this.primed || !this.ss || !voiceOn) return; this.primed = true;
-    try { const u = this.utter(' '); u.volume = 0; this.ss.speak(u); } catch (e) {}
+    try { if (this.ss.paused) this.ss.resume(); const u = this.utter(' '); u.volume = 0; this.ss.speak(u); } catch (e) {}
   },
   /* a discard: cut off the previous tile name so fast AI turns never build a backlog; never cut off a call */
   tile(t) {
     if (!this.ss || !voiceOn) return;
     const text = sayTile(t);
     if (this.calls > 0) { this.deferred = text; return; }
-    try { this.ss.cancel(); this.ss.speak(this.utter(text)); } catch (e) {}
+    try { this.cut(); this.say(this.utter(text)); } catch (e) {}
   },
   /* 碰 / 杠 / 听 / 胡 / 自摸: queued behind whatever is speaking, and protected from the next discard */
   call(text) {
     if (!this.ss || !voiceOn) return;
     try {
       const u = this.utter(text); let done = false;
-      const fin = () => { if (done) return; done = true; this.calls = Math.max(0, this.calls - 1); if (!this.calls && this.deferred) { const d = this.deferred; this.deferred = null; if (voiceOn) try { this.ss.speak(this.utter(d)); } catch (e) {} } };
+      const fin = () => { if (done) return; done = true; this.calls = Math.max(0, this.calls - 1); if (!this.calls && this.deferred) { const d = this.deferred; this.deferred = null; if (voiceOn) try { this.say(this.utter(d)); } catch (e) {} } };
       u.__end = fin; u.__err = fin; setTimeout(fin, 3000);
-      this.calls++; this.ss.speak(u);
+      this.calls++; this.say(u);
     } catch (e) {}
   },
-  stop() { this.calls = 0; this.deferred = null; try { if (this.ss) this.ss.cancel(); } catch (e) {} }
+  stop() { this.calls = 0; this.deferred = null; this.live.forEach(u => { u.__done = true; clearTimeout(u.__wd); }); this.live.clear(); try { if (this.ss) this.ss.cancel(); } catch (e) {} }
 };
 Voice.init();
 
