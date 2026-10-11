@@ -542,6 +542,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .okt{display:none;flex-basis:100%;align-items:flex-start;gap:6px;padding:2px 0 2px 2px}
 .orow.open .okt{display:flex}
 .okl{flex:none;font-size:10px;font-weight:900;color:#7dffaa;line-height:24px}
+.okt.n .okl{color:#a9b4ae}.okt.n .ukc{opacity:.85}.okt.n .ukc.hi{opacity:1}
 .ukcmp{margin:6px 0 2px;display:flex;flex-direction:column;gap:4px}
 .ukl{display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;font-size:12px;line-height:1.4}
 .ukl .ukh{flex-basis:100%}.ukl b{color:var(--gold)}
@@ -1320,11 +1321,12 @@ function evalDiscards(st, p) {
       x.long = x.waits.some(w => x.wb[w].longs.length && pts(w) >= 3);
       x.val = x.legal ? 60 + x.waits.reduce((a, w) => a + rem[w] * waitWeight(w, x.wb[w].base) * 4, 0) : 10 + x.ukeire;
     } else {
-      // rank: 好进张 first, then total 进张 (6+ point tiles a slight plus); see ukeireTiers
+      // rank (same as train.js effCmp): 2+ 向听 -> total 进张 first, 好进张 as tiebreak;
+      // 1 向听 -> 好进张 first, then total 进张 (6+ point tiles a slight plus); see ukeireTiers
       const tr = ukeireTiers(c, nm, rem, x.s);
       let u6 = 0; for (const y of tr.good.concat(tr.norm)) if (pts(y) >= 6) u6 += rem[y];
       x.ukeire = tr.uk; x.kinds = tr.kinds; x.ug = tr.ug; x.un = tr.un; x.good = tr.good; x.norm = tr.norm;
-      x.val = tr.ug * 2 + tr.uk * 0.15 + u6 * 0.05;
+      x.val = x.s >= 2 ? tr.uk + tr.ug * 0.1 + u6 * 0.05 : tr.ug * 2 + tr.uk * 0.15 + u6 * 0.05;
     }
     c[x.tile]++;
     const tp = pts(x.tile);
@@ -1495,13 +1497,23 @@ function discardTable(st, p, withEngine) {
 }
 /* 进张 display: '进 61（好 24 · 一般 37）' */
 const ukStr = r => `进 ${r.uk}（好 ${r.ug} · 一般 ${r.un}）`;
-/* ranking used by 牌效题 and the review: shanten, then 好进张, then total 进张 */
-const effCmp = (a, b) => a.s - b.s || b.ug - a.ug || b.uk - a.uk;
+/* ranking used by 牌效题, the review and the hint engine: shanten first; then
+   2+ 向听: total 进张 first (keep the hand wide), 好进张 as tiebreak;
+   1 向听: 好进张 first (direct sets / pair / 报听-able 听牌), then total 进张 */
+const totalFirst = s => s >= 2;
+const effCmp = (a, b) => a.s - b.s || (totalFirst(a.s) ? b.uk - a.uk || b.ug - a.ug : b.ug - a.ug || b.uk - a.uk);
+/* best discards of a 牌效题 by the current rule (old saved questions are re-graded with it) */
+function effAnswer(rows) { const srt = rows.slice().sort(effCmp); return srt.filter(r => effCmp(r, srt[0]) === 0).map(r => r.tile); }
 /* one-line reason why row a beats row b */
 function effWhy(a, b) {
   if (a.s !== b.s) return `打 ${tn(b.tile)} 会退成${sName(b.s)}`;
-  if (a.ug !== b.ug) return `好进张多 ${a.ug - b.ug} 张（${a.ug} 对 ${b.ug}）`;
-  if (a.uk !== b.uk) return `好进张一样多（${a.ug} 张），总进张多 ${a.uk - b.uk} 张`;
+  if (totalFirst(a.s)) {
+    if (a.uk !== b.uk) return `总进张多 ${a.uk - b.uk} 张（${a.uk} 对 ${b.uk}）`;
+    if (a.ug !== b.ug) return `总进张一样多（${a.uk} 张），好进张多 ${a.ug - b.ug} 张（${a.ug} 对 ${b.ug}）`;
+  } else {
+    if (a.ug !== b.ug) return `好进张多 ${a.ug - b.ug} 张（${a.ug} 对 ${b.ug}）`;
+    if (a.uk !== b.uk) return `好进张一样多（${a.ug} 张），总进张多 ${a.uk - b.uk} 张`;
+  }
   return '好进张、总进张都一样';
 }
 const worse = (a, b) => ({ good: 0, ok: 1, bad: 2 }[a] >= { good: 0, ok: 1, bad: 2 }[b] ? a : b);
@@ -1525,7 +1537,7 @@ function analyzeSelf(d) {
   const eng = G.AI.selfTurn(st, 0, o);
   const recTile = tb.eng[0].tile, recTing = o.tingOptions.some(x => x.tile === recTile);
   out.rec = { type: 'discard', tile: recTile, ting: recTing };
-  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, uk: r.uk, ug: r.ug, un: r.un, goodTiles: r.goodTiles, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger, wb: r.wb || null }));
+  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, uk: r.uk, ug: r.ug, un: r.un, goodTiles: r.goodTiles, normTiles: r.normTiles, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger, wb: r.wb || null }));
   out.rem = tb.rem;
   const K = byT[a.tile], R = byT[recTile];
   const B = tb.rows.filter(r => r.s === tb.minS).sort(effCmp)[0];
@@ -1561,10 +1573,15 @@ function analyzeSelf(d) {
   } else if (R.plan && K.s === R.s) {
     msg = `${sName(K.s)}，${ukStr(K)}；推荐打 ${tn(R.tile)} 做${PLAN_STR[R.plan]}，胡了底分 ${G.LONG_PTS} 起`;
     if (K.ug < R.ug * 0.7) { v = 'ok'; type = 'efficiency'; sev = 4; }
-  } else if (effCmp(K, R) <= 0 || (K.ug >= R.ug - 1 && K.uk >= R.uk - 2)) {
+  } else if (effCmp(K, R) <= 0 || (totalFirst(K.s) ? K.uk >= R.uk - 2 && K.ug >= R.ug - 2 : K.ug >= R.ug - 1 && K.uk >= R.uk - 2)) {
     msg = effCmp(K, R) <= 0 ? `${sName(K.s)}，${ukStr(K)}，很好` : `${ukStr(K)}，和推荐（打 ${tn(R.tile)} ${ukStr(R)}）相当`;
+  } else if (totalFirst(K.s)) {
+    // 2+ 向听: judged by total 进张 first, 好进张 only as tiebreak
+    v = K.uk >= R.uk * 0.7 ? 'ok' : 'bad'; type = 'efficiency';
+    msg = `打 ${tn(R.tile)} ${ukStr(R)}；你打 ${tn(K.tile)} ${ukStr(K)}。离听牌还远，牌越宽越好，推荐的${effWhy(R, K)}`;
+    sev = Math.max(1, (R.uk - K.uk) * 0.6 + Math.max(0, R.ug - K.ug) * 0.2);
   } else {
-    // judged by 好进张 first, then total 进张
+    // 1 向听: judged by 好进张 first, then total 进张
     v = K.ug >= R.ug * 0.7 && K.uk >= R.uk * 0.7 ? 'ok' : 'bad'; type = 'efficiency';
     msg = `打 ${tn(R.tile)} ${ukStr(R)}；你打 ${tn(K.tile)} ${ukStr(K)}。推荐的${effWhy(R, K)}`;
     sev = Math.max(1, (R.ug - K.ug) * 1.5 + (R.uk - K.uk) * 0.3);
@@ -1670,7 +1687,7 @@ function exportText(rec, an) {
   L.push('规则: 136张无花; 可碰杠不可吃; 必须报听才能胡, 报听后手牌锁定; 报听需听口含6点以上; 牌点=数字, 字牌10; 1-2点不能胡, 3-5点只能自摸, 6点以上可自摸可点炮; 龙: 青龙(清一色,含副露全是一门数牌)/七对龙(七对,只能门清,四张算两对)/一条龙(门清顺子123456789同一门) 每种底分20可叠加(七对龙与一条龙互斥), 有龙时底分代替胡牌点数, 但能否胡仍看胡的那张牌的点数; 得分=底分(无龙时为胡牌点数)×2(自摸)×2^暗杠数; 自摸三家各付; 未报听者点炮包胡(付3份), 已报听者点炮三家各付; 无耗子无庄分');
   L.push('座位: ' + [0, 1, 2, 3].map(i => `${NAMES[i]}(${WINDS[(i - rec.dealer + 4) % 4]}${i === rec.dealer ? '/庄' : ''})`).join(' ') + ' | 开局分: ' + [0, 1, 2, 3].map(i => `${NAMES[i]} ${rec.scores0[i]}`).join(' '));
   L.push(`Kevin配牌: [${groupStr(rec.hands0[0])}]`);
-  L.push('--- 过程（Kevin 每手附引擎推荐与评价；[进 N（好 a · 一般 b）] = 打后进张: 好进张=直接成组/补将/可报听的听牌, 一般=其余; 推荐先比向听, 再比好进张, 再比总进张）---');
+  L.push('--- 过程（Kevin 每手附引擎推荐与评价；[进 N（好 a · 一般 b）] = 打后进张: 好进张=直接成组/补将/可报听的听牌, 一般=其余; 推荐先比向听; 差2步以上先比总进张再比好进张, 一向听先比好进张再比总进张）---');
   const pend = [null, null, null, null]; let dec = null;
   for (const e of rec.events) {
     const xs = `第${e.xun || 1}巡`;
@@ -1745,7 +1762,7 @@ function aggregate(list) {
 
 /* ---------------- drills ---------------- */
 const DRILLS = {
-  xiaolv: { name: '牌效题', desc: '14 张手牌，打哪张牌效最好？（先比好进张）' },
+  xiaolv: { name: '牌效题', desc: '14 张手牌，打哪张牌效最好？（向听远看总进张，一向听看好进张）' },
   tingpai: { name: '听牌题', desc: '13 张手牌，听哪几张？能不能报听？' },
   baoting: { name: '报听选择', desc: '几种报听打法，哪种最好？' },
   fangshou: { name: '防守题', desc: '对手已报听，打哪张最安全？' },
@@ -1793,9 +1810,9 @@ async function genXiaolv(rng) {
     // favour positions where the 好/一般 split matters (1-向听 进张 almost always lead to 报听-able 听牌)
     const tierful = tb.rows.some(r => r.s === tb.minS && r.un > 0);
     if (!tierful && rng() < 0.85) return null;
-    // ranking: shanten, then 好进张, then total 进张
+    // ranking: effCmp (shanten; 2+ 向听 total 进张 first, 1 向听 好进张 first)
     const srt = tb.rows.slice().sort(effCmp), top = srt[0];
-    const ans = srt.filter(r => effCmp(r, top) === 0).map(r => r.tile);
+    const ans = effAnswer(tb.rows);
     const others = tb.rows.filter(r => !ans.includes(r.tile));
     if (ans.length > 2 || top.uk < 8 || top.ug < 4) return null;
     if (!others.some(r => r.s === tb.minS && (r.ug <= top.ug - 3 || r.uk <= top.uk - 4))) return null;
@@ -2012,10 +2029,13 @@ function checkAnswer(q, ans) {
     return { correct: wOk && tOk, wOk, tOk };
   }
   if (q.type === 'suanfen') return { correct: ans === q.answer };
+  if (q.type === 'xiaolv') normQ(q);
   return { correct: q.answer.includes(ans) };
 }
+/* 牌效题 saved under an older ranking (错题本) are re-graded with the current rule */
+function normQ(q) { if (q && q.type === 'xiaolv' && q.rows && q.rows.length) q.answer = effAnswer(q.rows); return q; }
 
-const api = { ukStr, effCmp, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, analyzeRecord,
+const api = { ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, analyzeRecord,
   exportText, handStats, aggregate, genQuestion, checkAnswer, safetyTier, remFromSeen, payFor, tingRows, bestTing, waitClass, simCapture, setYield, seenOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDDT = api;
@@ -2481,6 +2501,7 @@ function computeHint(rem) {
     else if (b.isolated && b.tile >= 27) { short = '孤张字牌'; reason = '孤张字牌很难成型'; }
     else if (b.isolated) { short = '孤张'; reason = '孤张，周围没有能连的牌'; }
     else if (tp <= 2) { short = '点数太小'; reason = '1–2 点的牌做听口不能胡，价值低'; }
+    else if (b.s >= 2) { short = '进张最多'; reason = `离听牌还差 ${b.s} 步，先求牌宽：打它留下的总进张最多`; }
     else { short = '好进张最多'; reason = '打它留下的好进张（直接成组/补将/听牌）最多'; }
     const tail = b.s === 0 ? (b.legal ? `打后听 ${ws(b.waits)}` : '打后虽然听牌，但听口没有 6 点以上的牌，不能报听，继续改良') : `打后 ${b.s} 向听，进 ${b.ukeire} 张（<b class="ukg">好 ${b.ug}</b> · <span class="ukn">一般 ${b.un}</span>）`;
     const gl = b.s > 0 && b.good && b.good.length ? `<div class="hgood"><span class="hgl">好进张 <b class="ukg">${b.ug}</b> 张：</span>${ukTilesHTML(b.good, rem)}</div>` : '';
@@ -2727,7 +2748,7 @@ function showRules() {
   <h3>报听与点数</h3><ul><li><b>必须报听才能胡</b>；报听后手牌锁定，只能打出摸到的牌。</li><li>数字牌按面值算点，字牌 10 点；听口里要有 6 点以上的牌才能报听。</li><li>1–2 点不能胡；3–5 点只能自摸；6 点以上自摸、点炮都能胡。</li></ul>
   <h3>算分</h3><ul><li>得分 = 底分（没有龙时 = 胡的那张牌的点数；有龙时 = 每种龙 20）；自摸 ×2；每个暗杠再 ×2。</li><li>自摸：三家各付一份。点炮：没报听的人点炮 → 一个人包三家；已报听的人点炮 → 三家各付一份。</li><li>不带耗子、不带庄分；牌墙摸完没人胡算流局，庄家没胡就轮庄。</li></ul>
   <h3>龙（加分牌型）</h3><ul><li><b>青龙</b>：清一色，整手牌连副露都是同一门数字牌，没有字牌，什么牌型都行。</li><li><b>七对龙</b>：七对胡牌，只能门清；四张一样的算两对。</li><li><b>一条龙</b>：普通牌型里有同一门的 123、456、789 三组顺子（门清，不能吃）。</li><li>每种龙底分 <b>20</b>，可以叠加：青龙 + 七对龙 = 40，青龙 + 一条龙 = 40（七对龙和一条龙不会同时出现）。有龙时<b>底分代替胡牌那张的点数</b>，再算自摸 ×2、暗杠 ×2。</li><li>注意：<b>能不能胡仍然看胡的那张牌</b>——要报听、听口要有 6 点以上才能报听；胡 1–2 点的牌不能胡，3–5 点只能自摸，6 点以上才能点炮胡，有龙也一样。</li><li>例：青龙 20 + 七对龙 20 = 40 × 自摸 2 = 80 分，三家各付 80。</li></ul>
-  <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数，再比好进张，好进张一样再比总进张；都一样时才看孤张字牌、点数等小细节。</li></ul>
+  <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数（离听牌越近越好）。离听牌还差 2 步以上时，先比<b>总进张</b>，牌越宽越好，总进张一样再比好进张；只差 1 步（一向听）时，先比<b class="ukg">好进张</b>，好进张一样再比总进张。都一样时才看孤张字牌、点数等小细节。</li></ul>
   <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>右上角的对话气泡按钮是「语音报牌」：开着时会念出每张打出的牌，以及碰、杠、听、胡、自摸；和音效按钮分开控制。</li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li><li>电脑：鼠标点选、再点打出；键盘 <b>← →</b> 选牌，<b>Enter</b> 或 <b>↑</b> 打出，<b>空格</b> 过，<b>H</b> 胡 · <b>P</b> 碰 · <b>G</b> 杠 · <b>T</b> 听，<b>Esc</b> 取消，<b>F</b> 全屏。</li></ul></div>
   <div class="mfoot"><button class="gbtn" id="closeRules2">知道了</button></div>`);
   $('closeRules').onclick = hideModal; $('closeRules2').onclick = hideModal;
@@ -2991,28 +3012,44 @@ const TIERL = ['安全', '较安全', '一般', '危险'];
 /* 好进张 detail: a candidate row whose good tiles drop onto a line underneath (tap to expand/collapse) */
 const ukChips = (tiles, rem, hi) => U.ukTilesHTML(tiles, rem, hi);
 function ukRow(r, rem, o) {
-  const has = r.s > 0 && r.goodTiles && r.goodTiles.length, open = has && o.open;
+  const wide = r.s >= 2 && r.normTiles && r.normTiles.length;
+  const has = r.s > 0 && ((r.goodTiles && r.goodTiles.length) || wide), open = has && o.open;
   return `<div class="orow ukr ${o.cls || ''} ${open ? 'open' : ''} ${has ? '' : 'nox'}" ${has ? 'data-act="ukx"' : ''}>${tl(r.tile, 'tp')}${o.tag ? `<span class="otag">${o.tag}</span>` : ''}` +
     `<span class="o1">${o.o1}</span><span class="o2">${o.o2}</span>${has ? '<span class="ukar" aria-hidden="true">›</span>' : ''}` +
-    (has ? `<div class="okt"><span class="okl">好进张</span>${ukChips(r.goodTiles, rem, o.hi)}</div>` : '') + `</div>`;
+    (has ? `<div class="okt"><span class="okl">好进张</span>${ukChips(r.goodTiles, rem, o.hi)}</div>` : '') +
+    (has && wide ? `<div class="okt n"><span class="okl">一般</span>${ukChips(r.normTiles, rem, o.hi)}</div>` : '') + `</div>`;
 }
 /* concrete comparison: which good tiles only the better discard keeps (and vice versa) */
 function ukCmpHTML(a, b, rem, mineLabel) {
   if (!a || !b || a.s !== b.s || a.s <= 0 || !a.goodTiles || !b.goodTiles) return '';
+  const sum = xs => xs.reduce((x, t) => x + (rem[t] || 0), 0);
+  // 2+ 向听: the ranking is by total 进张, so compare every 进张 tile (needs normTiles; older data skips this)
+  if (T.totalFirst(a.s)) {
+    if (!a.normTiles || !b.normTiles) return '';
+    const A = a.goodTiles.concat(a.normTiles), B = b.goodTiles.concat(b.normTiles), Bs = new Set(B), As = new Set(A);
+    const oA = A.filter(t => !Bs.has(t)), oB = B.filter(t => !As.has(t));
+    if (!oA.length && !oB.length) return `<div class="ukcmp"><div class="ukl"><span class="ukh">两张打法的进张完全一样（${a.uk} 张）</span></div></div>`;
+    if (a.uk <= b.uk) return '';
+    return `<div class="ukcmp">` +
+      (oA.length ? `<div class="ukl"><span class="ukh">打 <b>${tn(a.tile)}</b> 多出来的进张 <b>+${sum(oA)}</b> 张：</span>${ukChips(oA, rem, new Set(oA))}</div>` : '') +
+      (oB.length ? `<div class="ukl mine"><span class="ukh">${mineLabel} <b>${tn(b.tile)}</b> 独有 ${sum(oB)} 张：</span>${ukChips(oB, rem)}</div>` : '') +
+      `<div class="ukl sum">其余 ${A.length - oA.length} 种进张两边都有</div></div>`;
+  }
+  // 1 向听: compare 好进张, but only when the better discard really keeps more of them
   const bs = new Set(b.goodTiles), as = new Set(a.goodTiles);
   const onlyA = a.goodTiles.filter(t => !bs.has(t)), onlyB = b.goodTiles.filter(t => !as.has(t));
-  const sum = xs => xs.reduce((x, t) => x + (rem[t] || 0), 0);
   if (!onlyA.length && !onlyB.length) return `<div class="ukcmp"><div class="ukl"><span class="ukh">两张打法的好进张完全一样（${a.ug} 张）</span></div></div>`;
+  if (a.ug <= b.ug) return '';
   return `<div class="ukcmp">` +
     (onlyA.length ? `<div class="ukl"><span class="ukh">打 <b>${tn(a.tile)}</b> 多出来的好进张 <b class="ukg">+${sum(onlyA)}</b> 张：</span>${ukChips(onlyA, rem, new Set(onlyA))}</div>` : '') +
     (onlyB.length ? `<div class="ukl mine"><span class="ukh">${mineLabel} <b>${tn(b.tile)}</b> 独有 ${sum(onlyB)} 张：</span>${ukChips(onlyB, rem)}</div>` : '') +
     `<div class="ukl sum">其余 ${a.goodTiles.length - onlyA.length} 种好进张两边都有</div></div>`;
 }
 function renderDrill() {
-  const s = D, q = s.qs[s.i], done = !!s.res;
+  const s = D, q = T.normQ(s.qs[s.i]), done = !!s.res;
   let prompt = '', board = '', side = '', hand = '', cls = q.type;
   if (q.type === 'xiaolv') {
-    prompt = `打哪张<b>牌效最好</b>？<small>先比向听，再比<b class="ukg">好进张</b>，再比总进张（按场上还剩的张数算）</small>`;
+    prompt = `打哪张<b>牌效最好</b>？<small>先比向听；差 2 步以上先比<b>总进张</b>，一向听先比<b class="ukg">好进张</b>（按场上还剩的张数算）</small>`;
     board = pondsHTML(q.seen) + `<div class="wleft">牌墙还剩 ${q.seen.left} 张</div>`;
     const by = {}; q.rows.forEach(r => { by[r.tile] = r; });
     const opt = { melds: q.melds, act: done ? null : 'pick', selT: done ? null : s.selT, selK: done ? null : s.selK };
@@ -3030,9 +3067,10 @@ function renderDrill() {
       // why the best wins: vs your pick, or vs the runner-up when you were right
       const rival = s.res.correct ? srt.find(r => !q.answer.includes(r.tile)) : mine;
       const rem = T.remFromSeen(q.hand, q.seen);
-      const ukH = r => `好进张 <b class="ukg">${r.ug}</b> 张<span class="ukn"> · 一般 ${r.un}</span>`;
+      const ukH = r => T.totalFirst(r.s) ? `总进张 <b>${r.uk}</b> 张<span class="ukn">（好 ${r.ug} · 一般 ${r.un}）</span>` : `好进张 <b class="ukg">${r.ug}</b> 张<span class="ukn"> · 一般 ${r.un}</span>`;
       const cmpA = best, cmpB = rival && rival.s === best.s ? rival : null;
-      const onlyBest = cmpB ? new Set(best.goodTiles.filter(t => !cmpB.goodTiles.includes(t))) : null;
+      const allOf = r => T.totalFirst(r.s) && r.normTiles ? r.goodTiles.concat(r.normTiles) : r.goodTiles;
+      const onlyBest = cmpB ? new Set(allOf(best).filter(t => !allOf(cmpB).includes(t))) : null;
       side = fb(s.res.correct) + `<div class="ex">最佳：打 <b>${q.answer.map(tn).join(' / ')}</b>，${T.sName(best.s)}，${ukH(best)}` +
         (s.res.correct ? '' : `<br>你打 <b>${tn(s.ans)}</b>：${mine.s > q.minS ? `退成${T.sName(mine.s)}` : ukH(mine)}`) + `</div>` +
         (rival ? `<div class="ex why">💡 ${s.res.correct ? `比次选 ${tn(rival.tile)}：` : ''}${T.effWhy(best, rival)}</div>` : '') +
@@ -3041,7 +3079,7 @@ function renderDrill() {
           const isBest = q.answer.includes(r.tile), isMine = r.tile === s.ans && !s.res.correct, back = r.s > q.minS;
           return ukRow(r, rem, { cls: isBest ? 'best' : isMine ? 'mine' : '', open: isBest ? r.tile === q.answer[0] || r.tile === s.ans : isMine,
             tag: isBest ? '最佳' : isMine ? '你打' : '', hi: isBest && r.tile === best.tile ? onlyBest : null,
-            o1: back ? '退向听' : `<b class="ukg">好 ${r.ug}</b>`, o2: back ? '' : `<span class="ukn">一般 ${r.un}</span>` });
+            o1: back ? '退向听' : T.totalFirst(r.s) ? `<b>进 ${r.uk}</b>` : `<b class="ukg">好 ${r.ug}</b>`, o2: back ? '' : T.totalFirst(r.s) ? `<b class="ukg">好 ${r.ug}</b> <span class="ukn">· 一般 ${r.un}</span>` : `<span class="ukn">一般 ${r.un}</span>` });
         }).join('')}</div>` +
         `<div class="ex small">点任一行展开/收起它的好进张。<b class="ukg">好进张</b>：摸到直接成一组顺子/刻子、补出缺的将，或直接听牌（七对路线上凑出新对子也算）。×N = 场上还剩几张。<span class="ukn">一般进张</span>：其余能减少向听的牌（如孤张变搭子）。</div>` + nextBtn();
     }
@@ -3155,7 +3193,7 @@ function ansText(q, a) {
 function rightText(q) {
   if (q.type === 'tingpai') return ansText(q, q.answer);
   if (q.type === 'suanfen') return ansText(q, q.answer);
-  return '打 ' + q.answer.map(tn).join(' / ');
+  return '打 ' + T.normQ(q).answer.map(tn).join(' / ');
 }
 function showWrong() {
   open(); scr = { name: 'wrong' };
@@ -3279,7 +3317,8 @@ function renderReview() {
     const rows = it.rows.slice(0, 5);
     const myRow = it.rows.find(r => r.tile === myT); if (myRow && !rows.includes(myRow)) rows[4] = myRow;
     const recRow = it.rows.find(r => r.tile === recT);
-    const onlyRec = recRow && myRow && recRow !== myRow && recRow.s === myRow.s && recRow.goodTiles && myRow.goodTiles ? new Set(recRow.goodTiles.filter(t => !myRow.goodTiles.includes(t))) : null;
+    const allOf = r => T.totalFirst(r.s) && r.normTiles ? r.goodTiles.concat(r.normTiles) : r.goodTiles;
+    const onlyRec = recRow && myRow && recRow !== myRow && recRow.s === myRow.s && recRow.goodTiles && myRow.goodTiles && (T.totalFirst(recRow.s) ? recRow.uk > myRow.uk : recRow.ug > myRow.ug) ? new Set(allOf(recRow).filter(t => !allOf(myRow).includes(t))) : null;
     if (rem && recRow && myRow && recRow !== myRow && it.kind === 'self' && it.verdict !== 'good') cmp = ukCmpHTML(recRow, myRow, rem, '你打');
     opts = `<div class="otab uk rvt">${rows.map(r => {
       const isRec = r.tile === recT, isMine = r.tile === myT && !isRec;
@@ -3287,7 +3326,7 @@ function renderReview() {
       const dg = r.danger >= 6 ? ' <em class="dg">危险</em>' : '';
       if (r.s === 0 || !rem || !r.goodTiles) return `<div class="orow ${isRec ? 'best' : isMine ? 'mine' : ''}">${tl(r.tile, 'tp')}<span class="o1">${o1}</span><span class="o2">${r.s === 0 ? `听 ${r.waits.map(tn).join(' ')} · 能胡 ${r.winRem}` : `进 ${r.uk}（<b class="ukg">好 ${r.ug}</b> · <span class="ukn">一般 ${r.un}</span>）`}${dg}</span></div>`;
       return ukRow(r, rem, { cls: isRec ? 'best' : isMine ? 'mine' : '', open: isRec || isMine, tag: isRec ? '推荐' : isMine ? '你打' : '', hi: isRec ? onlyRec : null,
-        o1, o2: `<b class="ukg">好 ${r.ug}</b> <span class="ukn">· 一般 ${r.un}</span>${dg}` });
+        o1, o2: (T.totalFirst(r.s) ? `<b>进 ${r.uk}</b> <span class="ukn">· 好 ${r.ug} · 一般 ${r.un}</span>` : `<b class="ukg">好 ${r.ug}</b> <span class="ukn">· 一般 ${r.un}</span>`) + dg });
     }).join('')}</div>`;
   }
   const claimInfo = it.kind === 'claim' ? `<div class="ex">${NAMES[lastP]} 打出 ${tl(it.t, 'tp')}，你可以${[d.o.hu && '胡', d.o.peng && '碰', d.o.gang && '杠'].filter(Boolean).join(' / ')}</div>` : '';
