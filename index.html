@@ -184,6 +184,15 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 #myhand .tile.sel .up::after{content:"";position:absolute;left:50%;bottom:-4px;margin-left:-4px;border:4px solid transparent;border-bottom:0;border-top:4px solid #e7a92e}
 #myhand .tile.match{transform:translateY(-6px);box-shadow:0 0 0 2px #fff3c4,0 0 0 4px #ff9a3c,0 6px 10px rgba(0,0,0,.4)}
 #myhand .tile.rec::before{content:"荐";position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:800;color:#3b2a00;background:linear-gradient(#ffe9a0,#e7b23c);border-radius:999px;padding:0 5px;line-height:15px;border:1px solid #fff1c2;z-index:2}
+#myhand .tile .dpct{position:absolute;left:50%;bottom:1px;transform:translateX(-50%);font-size:10px;font-weight:800;line-height:14px;padding:0 4px;border-radius:999px;white-space:nowrap;z-index:2;pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.45)}
+#myhand .tile .dpct.d0{background:#2f9e5b;color:#fff}#myhand .tile .dpct.d1{background:#e7c23c;color:#3b2a00}#myhand .tile .dpct.d2{background:#f08a24;color:#fff}#myhand .tile .dpct.d3{background:#d43a2a;color:#fff}
+.hdef{margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed rgba(255,215,105,.3)}.hdef>b{color:#ffb27a}
+.hrisk{display:flex;flex-direction:column;gap:1px;margin-top:3px;font-size:12px;color:#d6e4dc}.hrisk b{color:#ffcf6b}
+.rsk{display:inline-block;white-space:nowrap;flex:none;font-style:normal;font-size:11px;font-weight:800;border-radius:999px;padding:0 6px;line-height:16px;margin-left:4px;vertical-align:1px}
+.rsk.d0{background:rgba(47,158,91,.5);color:#e6ffef}.rsk.d1{background:#e7c23c;color:#3b2a00}.rsk.d2{background:#f08a24;color:#fff}.rsk.d3{background:#d43a2a;color:#fff}
+.hb.d0{background:#2f9e5b;color:#fff}.hb.d1{background:#e7c23c;color:#3b2a00}.hb.d2{background:#f08a24;color:#fff}.hb.d3{background:#d43a2a;color:#fff}
+.dtab{display:flex;flex-direction:column;gap:2px;margin:4px 0;font-size:12.5px}.dtab .dr{display:flex;align-items:center;gap:6px;line-height:1.35}.dtab .dr .tile{flex:none}.dtab .dr .dw{color:#cfe0d6}
+.dtab .dr.ans{background:rgba(47,158,91,.18);border-radius:6px}.dtab .dr.mine{background:rgba(212,58,42,.16);border-radius:6px}
 #myhand .tile.dim{filter:brightness(.55) saturate(.6);transform:translateY(4px)}
 #myhand .tile.tingok{box-shadow:0 0 0 2px #ffb057,0 4px 0 #2a8a5f,0 0 10px rgba(255,160,60,.6)}
 #myhand .tile.tingok.sel{box-shadow:0 0 0 2px #fff6c9,0 0 0 4px #ff9a3c,0 8px 16px rgba(0,0,0,.45)}
@@ -380,6 +389,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
  #myhand .tile.lg{--w:var(--tw,40px);--h:calc(var(--w)*1.38);border-radius:5px}
  #mymelds .tile.md{--w:calc(var(--tw,40px)*.66);--h:calc(var(--w)*1.38);border-radius:3px}
  #myhand .tile.rec::before{font-size:9px;line-height:13px;top:-7px}
+ #myhand .tile .dpct{font-size:9px;line-height:12px;padding:0 3px}
  #actions{gap:10px;bottom:calc(100% + 4px)}
  .act{--s:54px}.act.hu{--s:66px}.act.pass{--s:44px;font-size:19px}
  .claimcard{padding:3px 8px 3px 10px;gap:6px}.claimcard .cl{font-size:11px}.claimcard .tile.md{--w:28px;--h:39px;border-radius:4px}
@@ -1213,7 +1223,8 @@ function claimOptions(st, q, t) {
 function applyDiscard(st, p, t, ting) {
   const pl = st.players[p];
   removeTiles(pl.hand, t, 1);
-  pl.discards.push({ t, afterTing: pl.ting, tingMark: !!ting, claimed: false });
+  st.seq = (st.seq || 0) + 1; // global discard order (读牌: which tiles were discarded after someone's 报听)
+  pl.discards.push({ t, afterTing: pl.ting, tingMark: !!ting, claimed: false, seq: st.seq });
   if (ting) { pl.ting = true; pl.waits = waitsOf(counts(pl.hand), pl.melds.length); }
   pl.drawn = null;
   st.lastDiscard = { p, t, idx: pl.discards.length - 1 };
@@ -1350,6 +1361,163 @@ function danger(st, p, t, vis, threats) {
   }
   return d;
 }
+/* ---------- 读牌: what is a 报听 player waiting on? (uses ONLY what the viewer can see) ----------
+   Rules that matter: no 振听 (a tile he discarded BEFORE 报听 can still be his wait); after 报听 his hand is locked,
+   so a 3+ point tile he drew and threw away is not a wait (he would have 自摸), and a 6+ point tile anyone discarded
+   after his 报听 that he did not 胡 is not a wait either. His 报听 discard is face down (unknown).
+   Model: his concealed hand = finished sets + (pair + 搭子) / (two pairs) / (single), so the waiting part is one of
+     两面 ab (waits a-1, b+1) · 嵌张 a_c (waits b) · 边张 12/89 (3 / 7) · 对倒 xx+yy (x, y) · 单吊 x (x) · 七对单吊 x (门清 only).
+   Each shape gets weight = prior(type) × ways to hold its tiles from the viewer's unseen pool (C(rem, k))
+     × discard-reading factors (he threw a tile of the shape before 报听 -> less likely);
+   shapes whose waits have no 6+ point tile (can't 报听) or contain a ruled-out tile are dropped.
+   P(t is a winning tile) = weight share of the shapes waiting on t (then a calibrated multi-wait correction).
+   Priors / factors are calibrated on AI self-play (see calib19.js). */
+const WM = { prior: { ryan: 0.193, kan: 0.155, pen: 0.08, shan: 0.142, tanki: 0.124, qd: 0.107 }, hon: 0.313, fH: 0.404, fW: 0.208, fN: 0.688, alpha: 1.045, unk: 0.06, qing: 0.02, hand: 1.15 };
+const WM_Z = { ryan: 18 * 16, kan: 21 * 16, pen: 6 * 16, shan: 561 * 36, tanki: 34 * 4, qd: 34 * 4 }; // ways with a full pool: priors read as shape-type shares
+const SHAPE_NAMES = { ryan: '两面', kan: '嵌张', pen: '边张', shan: '对倒', tanki: '单吊', qd: '七对单吊' };
+function threatView(st, q) {
+  const pl = st.players[q], tm = pl.discards.find(d => d.tingMark);
+  const ts = tm && tm.seq != null ? tm.seq : null, pre = [], post = [], passed = [];
+  for (const d of pl.discards) { if (d.tingMark) continue; (d.afterTing ? post : pre).push(d.t); }
+  if (ts != null) st.players.forEach((o, i) => { if (i !== q) for (const d of o.discards) if (!d.tingMark && d.seq > ts) passed.push(d.t); });
+  return { q, nm: pl.melds.length, melds: pl.melds.map(m => ({ type: m.type, tile: m.tile })), pre, post, passed };
+}
+function comb(n, k) { return k === 1 ? n : k === 2 ? n * (n - 1) / 2 : k === 3 ? n * (n - 1) * (n - 2) / 6 : 1; }
+const sstr = ts => { const s = ts.slice().sort((a, b) => a - b); return s[0] < 27 ? s.map(t => t % 9 + 1).join('') + SUITS[(s[0] / 9) | 0] : s.map(t => HONORS[t - 27]).join(''); };
+/* v: threatView; rem: viewer's unseen counts. -> { p:[34] P(winning tile), base:[34] expected base if it wins, why:[34][reasons], unknown } */
+function waitModel(v, rem, P) {
+  P = P || WM;
+  const out = { p: new Array(34).fill(0), base: new Array(34).fill(0), why: [], shapes: [], unknown: false };
+  const pre = new Array(34).fill(0), nearPre = new Array(34).fill(0), outBy = new Array(34).fill(null);
+  for (const t of v.pre) pre[t]++;
+  for (let t = 0; t < 27; t++) if (pre[t]) for (const d of [-2, -1, 1, 2]) { const r = t % 9 + d; if (r >= 0 && r <= 8) nearPre[t + d] = 1; }
+  for (const t of v.post) if (pts(t) >= 3) outBy[t] = 'post';
+  for (const t of v.passed) if (pts(t) >= 6 && !outBy[t]) outBy[t] = 'passed';
+  const melds = v.melds || [], suit0 = melds.length && melds.every(m => m.tile < 27 && ((m.tile / 9) | 0) === ((melds[0].tile / 9) | 0)) ? (melds[0].tile / 9) | 0 : -1;
+  const shapes = [];
+  const add = (type, held, waits) => {
+    if (!waits.some(w => pts(w) >= 6) || waits.some(w => outBy[w])) return;
+    const k = {}; for (const x of held) k[x] = (k[x] || 0) + 1;
+    let w = P.prior[type] / WM_Z[type];
+    for (const x in k) { const c = comb(rem[x], k[x]); if (!c) return; w *= c; if (pre[x]) w *= P.fH; else if (nearPre[x]) w *= P.fN; }
+    if (held[0] >= 27 && (type === 'shan' || type === 'tanki' || type === 'qd')) w *= P.hon;
+    if (waits.some(x => pre[x])) w *= P.fW;
+    shapes.push({ type, held, waits, w });
+  };
+  for (let su = 0; su < 3; su++) {
+    const b = su * 9;
+    for (let r = 0; r <= 7; r++) { const a = b + r; if (r >= 1 && r <= 6) add('ryan', [a, a + 1], [a - 1, a + 2]); else add('pen', [a, a + 1], [r === 0 ? a + 2 : a - 1]); }
+    for (let r = 0; r <= 6; r++) add('kan', [b + r, b + r + 2], [b + r + 1]);
+  }
+  for (let x = 0; x < 34; x++) {
+    add('tanki', [x], [x]);
+    if (v.nm === 0) add('qd', [x], [x]);
+    for (let y = x + 1; y < 34; y++) add('shan', [x, x, y, y], [x, y]);
+  }
+  let W = 0; for (const s of shapes) W += s.w;
+  out.shapes = shapes;
+  const share = new Array(34).fill(0), bw = new Array(34).fill(0);
+  if (W > 0) for (const s of shapes) for (const t of s.waits) { share[t] += s.w / W; bw[t] += s.w / W * (s.type === 'qd' ? LONG_PTS : pts(t)); }
+  else out.unknown = true;
+  for (let t = 0; t < 34; t++) {
+    const pt = pts(t);
+    if (pt < 6) { out.why[t] = ['不到 6 点，不能点炮']; continue; }
+    if (outBy[t] === 'post') { out.why[t] = ['报听后他自己打过，绝对安全']; continue; }
+    if (outBy[t] === 'passed') { out.why[t] = ['报听后别人打过，他没胡，安全']; continue; }
+    if (out.unknown) { out.p[t] = P.unk; out.base[t] = pt; out.why[t] = ['看不出他听什么']; continue; }
+    const p = Math.min(0.95, 1 - Math.pow(1 - share[t], P.alpha));
+    out.p[t] = p;
+    let b = share[t] > 0 ? bw[t] / share[t] : pt;
+    if (suit0 >= 0 && t < 27 && ((t / 9) | 0) === suit0) b += P.qing * (b > pt ? LONG_PTS : LONG_PTS - pt); // 副露全是一门: 可能青龙
+    out.base[t] = b;
+    out.why[t] = null; // filled lazily by waitWhy()
+  }
+  out.pre = pre; out.outBy = outBy; out.suit0 = suit0; out.rem = rem;
+  return out;
+}
+/* up to 2 short reasons for tile t (6+ points, not ruled out) */
+function waitWhy(m, t, who) {
+  if (m.why[t]) return m.why[t];
+  who = who || '他';
+  const top = m.shapes.filter(s => s.waits.includes(t)).sort((a, b) => b.w - a.w), W = top.reduce((a, s) => a + s.w, 0);
+  const r = [];
+  const desc = s => s.type === 'shan' ? `一对 ${tname(s.held[0] === t ? s.held[0] : s.held[2])}（对倒）` : s.type === 'tanki' || s.type === 'qd' ? `${SHAPE_NAMES[s.type]} ${tname(t)}` : `${sstr(s.held)} ${SHAPE_NAMES[s.type]}`;
+  if (top.length) {
+    r.push(`${who}可能有 ${desc(top[0])}`);
+    if (top[1] && top[1].w >= 0.4 * top[0].w && top[1].type !== top[0].type) r[0] += `，或 ${desc(top[1])}`;
+  }
+  if (m.pre[t]) r.push(`报听前他打过 ${tname(t)}，没有振听，仍可能胡`);
+  else if (t < 27 && m.p[t] < 0.06) {
+    const r9 = t % 9, gone = [-2, -1, 1, 2].filter(d => r9 + d >= 0 && r9 + d <= 8 && m.rem[t + d] === 0).map(d => tname(t + d));
+    if (gone.length) r.push(`${gone.join('、')} 已经见光，能等它的搭子少`);
+  } else if (m.suit0 >= 0 && t < 27 && ((t / 9) | 0) === m.suit0) r.push(`副露都是${SUITS[m.suit0]}，可能做青龙`);
+  if (!r.length) r.push(`${tname(t)} 还有 ${m.rem[t]} 张没见`);
+  return r.slice(0, 2);
+}
+/* ---------- 防守 EV: is a risky discard worth it? ----------
+   P(deal in) for discard t = 1 − Π over 报听 players (1 − P_q(t)) (P_q from waitModel, ×WM.hand for tiles in the
+   viewer's hand: calibration showed held tiles run ~15% hotter). Cost = Σ_q P_q(t) × payment: a player who has not
+   报听 pays 包胡 = 3 × score (score = expected base × 2^暗杠 of q). Gain = P(win | after this discard) × 3 × expected
+   score, P(win) from a logistic fit on self-play turns where someone had 报听 (shanten, 进张, turns left, #报听).
+   EV = (1 − P(deal in)) × gain − cost; the best EV is the recommendation. */
+const WINP = [-6.956, 4.666, 2.399, 1.117, 2.29, 0.456, 0.131, 0.278, -0.566];
+const WIN_SCORE = 11.5; // average score of a win in self-play
+const DEFK = { fut: 1.5, FUT: [1, 3.5, 7, 10] }; // expected future 点炮 cost of pushing on from 听牌 / 一向听 / 两向听 / 3+
+function winChance(s, n, left, th) {
+  const T = left / 40, x = [1, s === 0 ? 1 : 0, s === 1 ? 1 : 0, s === 2 ? 1 : 0, Math.log1p(Math.max(0, n)) / 3, T, s === 0 ? T : 0, s === 1 ? T : 0, Math.min(Math.max(th, 1), 2) - 1];
+  let z = 0; for (let j = 0; j < x.length; j++) z += WINP[j] * x[j];
+  return 1 / (1 + Math.exp(-z));
+}
+let defCache = null;
+/* per hand tile kind: { p, pq:[{q,p}], cost, pay, q, why:[≤2 reasons] } for viewer p against every 报听 player */
+function defenseInfo(st, p) {
+  const threats = threatsFor(st, p), pl = st.players[p];
+  if (!threats.length || pl.ting) return null;
+  const key = p + '|' + st.front + '|' + st.back + '|' + pl.hand.slice().sort((a, b) => a - b).join(',') + '|' + st.players.map(x => x.discards.length + ':' + x.melds.length + ':' + x.ting).join(',');
+  if (defCache && defCache.st === st && defCache.key === key) return defCache.v;
+  const views = threats.map(q => ({ q, v: threatView(st, q), ag: st.players[q].melds.filter(x => x.type === 'angang').length }));
+  const v = defenseCore(pl.hand, remainingOf(st, p), views, remaining(st), p);
+  defCache = { st, key, v };
+  return v;
+}
+/* same from plain data (drills): hand, viewer's unseen counts, [{ q, v: threat view, ag }], wall left, viewer seat */
+function defenseCore(hand, rem, views, left, viewer) {
+  const ms = views.map(x => Object.assign({ m: waitModel(x.v, rem) }, x));
+  const name = q => viewer === 0 ? SEAT_NAMES[q] : '他';
+  const tiles = {};
+  for (const t of new Set(hand)) {
+    let safe = 1, cost = 0, top = null; const pq = [];
+    for (const M of ms) {
+      const x = Math.min(0.95, M.m.p[t] * (pts(t) >= 6 ? WM.hand : 1));
+      pq.push({ q: M.q, p: x });
+      safe *= 1 - x;
+      const pay = 3 * M.m.base[t] * Math.pow(2, M.ag || 0);
+      cost += x * pay;
+      if (!top || x > top.p) top = { q: M.q, p: x, pay, M };
+    }
+    let why = waitWhy(top.M.m, t, name(top.q));
+    if (top.p <= 0 && ms.length > 1 && pts(t) >= 6) why = ms.map(M => (viewer === 0 ? SEAT_NAMES[M.q] + '：' : '') + waitWhy(M.m, t)[0]).slice(0, 2);
+    tiles[t] = { p: 1 - safe, pq, cost, pay: top.pay, q: top.q, why };
+  }
+  return { threats: views.map(x => x.q), ms, tiles, rem, left };
+}
+/* attach x.def = { p, cost, pW, V, gain, ev } to evalDiscards candidates */
+function addDefense(cands, di, rem) {
+  const th = di.threats.length;
+  for (const x of cands) {
+    const n = x.s === 0 ? x.ukeire : x.s === 1 ? (x.ug || 0) : (x.ukeire || 0);
+    let V = 3 * WIN_SCORE;
+    if (x.s === 0 && x.waits) {
+      let a = 0, b = 0;
+      for (const w of x.waits) if (pts(w) >= 3 && rem[w] > 0) { const base = x.wb && x.wb[w] ? x.wb[w].base : pts(w); a += rem[w] * base * (pts(w) >= 6 ? 1.5 : 2); b += rem[w]; }
+      if (b) V = 3 * a / b;
+    }
+    const pW = x.s > 3 ? 0 : winChance(x.s, n, di.left, th), T = di.tiles[x.tile];
+    // pushing on also means more risky discards later (FUT, per 报听 player); folding is worth ~0, so the hand is worth max(0, push)
+    const fut = DEFK.fut * DEFK.FUT[Math.min(x.s, 3)] * (th > 1 ? 1.6 : 1), val = Math.max(0, pW * V - fut);
+    x.def = { p: T.p, cost: T.cost, pay: T.pay, q: T.q, why: T.why, pW, V, gain: pW * V, fut, val, ev: (1 - T.p) * val - T.cost };
+  }
+}
 function isIsolated(c, t) {
   if (c[t] !== 1) return false;
   if (t >= 27) return true;
@@ -1463,7 +1631,9 @@ function longValue(c, melds, rem) {
 }
 function lvBetter(a, b) { a = a || NO_LONG; b = b || NO_LONG; return a.base > b.base || (a.base > 0 && a.base === b.base && a.s < b.s); }
 const lvName = lv => (lv && LONG_ROUTE_NAMES[lv.key]) || '';
-function evalDiscards(st, p) {
+const AIOPT = { evDefense: false }; // bots: keep the v18 heuristic defense (normal difficulty); hints / review use the EV model
+function evalDiscards(st, p, opts) {
+  opts = opts || {};
   const pl = st.players[p], c = counts(pl.hand), nm = pl.melds.length;
   const vis = visibleCounts(st, p), rem = vis.map(x => Math.max(0, 4 - x));
   const threats = threatsFor(st, p);
@@ -1522,7 +1692,13 @@ function evalDiscards(st, p) {
     const defW = threats.length ? (minS >= 2 ? 120 : minS === 1 ? 40 : 10) : 0;
     x.total = -x.s * 100 + x.val + bias - x.danger * defW;
   }
-  cands.sort((a, b) => b.total - a.total);
+  const di = threats.length && !opts.legacyDefense ? defenseInfo(st, p) : null;
+  if (di) {
+    addDefense(cands, di, rem);
+    // EV first; the old offense order (without the danger term) only breaks near ties
+    for (const x of cands) { x.offTotal = x.total + x.danger * (minS >= 2 ? 120 : minS === 1 ? 40 : 10); x.evKey = x.def.ev + 0.003 * x.offTotal; }
+    cands.sort((a, b) => b.evKey - a.evKey);
+  } else cands.sort((a, b) => b.total - a.total);
   // near tie (same shanten, primary 进张 within 10%): prefer the discard that keeps the best 龙 route; rest of the order stays
   const b0 = cands[0];
   if (!threats.length && b0 && b0.s >= 1) {
@@ -1555,7 +1731,7 @@ const AI = {
       for (const t of o.angang) { c[t] -= 4; const s = effShanten(c, nm + 1, rem); c[t] += 4; if (s <= cur) return { type: 'angang', tile: t }; }
       for (const t of o.bugang) { c[t] -= 1; const s = effShanten(c, nm, rem); c[t] += 1; if (s <= cur) return { type: 'bugang', tile: t }; }
     }
-    const ev = evalDiscards(st, p), best = ev[0];
+    const ev = evalDiscards(st, p, { legacyDefense: !AIOPT.evDefense }), best = ev[0];
     // 报听 only with a usable 听牌 (a live 6+ point wait); an unusable one is ranked as 一向听 and kept improving
     const ting = best.s === 0 && o.tingOptions.some(x => x.tile === best.tile);
     return { type: 'discard', tile: best.tile, ting };
@@ -1577,7 +1753,7 @@ const AI = {
   }
 };
 
-const api = { structB, ukeireTiers, canBaotingAfter, usableTing, fakeTingUkeire, effShanten, ukeireEff, SUITS, HONORS, NUMS, SEAT_NAMES, pts, tname, counts, shanten, shantenNormal, shantenChiitoi, isWin, isWinNormal,
+const api = { DEFK, winChance, defenseInfo, defenseCore, addDefense, WIN_SCORE, AIOPT, WM, SHAPE_NAMES, threatView, waitModel, waitWhy, structB, ukeireTiers, canBaotingAfter, usableTing, fakeTingUkeire, effShanten, ukeireEff, SUITS, HONORS, NUMS, SEAT_NAMES, pts, tname, counts, shanten, shantenNormal, shantenChiitoi, isWin, isWinNormal,
   isSevenPairs, winShape, waitsOf, canWinTile, canTingWith, mulberry32, newRound, remaining, drawTile, visibleCounts, remainingOf,
   selfOptions, claimOptions, applyDiscard, applyPeng, applyMingang, applyAngang, applyBugang, computeScore, settleWin, settleDraw,
   playRound, evalDiscards, threatsFor, danger, isIsolated, AI, LONG_NAMES, LONG_PTS, isQingyise, isYitiao, longTypes, longTypesC, scoreFor, waitBases, waitWeight, longPlan,
@@ -1606,7 +1782,7 @@ function fakeTingStr(r, rem) {
 /* shanten name of a discard-table row; unusable 听牌 rows read as 一向听 with the reason */
 const rowSName = r => r.fake ? `${fakeTingStr(r)}，算一向听` : sName(r.s);
 const ICON = { good: '✅', ok: '⚠️', bad: '❌', info: '📌' };
-const TYPE_LABEL = { efficiency: '牌效（进张少）', shanten: '退向听', danger: '防守（打危险牌）', fangpao: '放炮', tingTiming: '该报听没报', tingChoice: '报听选择', deadWait: '听死牌', tingLegal: '听口不够 6 点', longKeep: '进张差不多没留龙', missHu: '漏胡', missKong: '漏杠', claim: '碰杠判断' };
+const TYPE_LABEL = { efficiency: '牌效（进张少）', shanten: '退向听', danger: '防守（风险不划算）', fangpao: '放炮', tingTiming: '该报听没报', tingChoice: '报听选择', deadWait: '听死牌', tingLegal: '听口不够 6 点', longKeep: '进张差不多没留龙', missHu: '漏胡', missKong: '漏杠', claim: '碰杠判断' };
 
 function groupStr(tiles) {
   const s = tiles.slice().sort((a, b) => a - b), parts = [];
@@ -1696,7 +1872,7 @@ function discardTable(st, p, withEngine) {
       r.uk = tr.uk; r.ug = tr.ug; r.un = tr.un; r.goodTiles = tr.good; r.normTiles = tr.norm; r.ukTiles = tr.good.concat(tr.norm).sort((a, b) => a - b);
     }
     c[t]++;
-    if (eng) { const e = eng[em[t].rank]; r.danger = em[t].danger; r.rank = em[t].rank; r.plan = e.plan || null; if (e.lv) { r.lv = e.lv; r.tieGroup = true; } }
+    if (eng) { const e = eng[em[t].rank]; r.danger = em[t].danger; r.rank = em[t].rank; r.plan = e.plan || null; if (e.lv) { r.lv = e.lv; r.tieGroup = true; } if (e.def) r.def = e.def; }
     rows.push(r);
   }
   const minS = Math.min(...rows.map(r => r.s));
@@ -1828,6 +2004,41 @@ const worse = (a, b) => ({ good: 0, ok: 1, bad: 2 }[a] >= { good: 0, ok: 1, bad:
 function waitsStr(r, rem) { return r.waits.map(w => `${tn(w)}${rem ? '(剩' + rem[w] + ')' : ''}${r.wb && r.wb[w] && r.wb[w].longs.length ? '[' + longStr(r.wb[w].longs) + ']' : ''}`).join(' '); }
 const PLAN_STR = { qing: '青龙（清一色）', qidui: '七对龙' };
 
+/* ---------------- 防守: 点炮概率 vs 进攻 (EV, see G.defenseInfo) ---------------- */
+const pctStr = p => p <= 0 ? '0' : p < 0.01 ? '不到 1%' : `约 ${Math.round(p * 100)}%`;
+const ukOf = r => r.uk != null ? r.uk : (r.ukeire || 0);
+/* what discard a gains over b on offense ('' when nothing) */
+function offGain(a, b) {
+  if (a.s < b.s) return a.s === 0 ? '能直接听牌' : `能进到${sName(a.s)}`;
+  if (a.s > b.s) return '';
+  const d = a.s === 0 ? ukOf(a) - ukOf(b) : a.s === 1 ? (a.ug || 0) - (b.ug || 0) : ukOf(a) - ukOf(b);
+  if (d <= 0) return '';
+  return a.s === 0 ? `能胡的牌多 ${d} 张` : a.s === 1 ? `多 ${d} 张好进张` : `多 ${d} 张进张`;
+}
+/* short sentences: why recommended R beats K (both carry .def) */
+function defenseCmp(R, K) {
+  const r = R.def, k = K.def, out = [];
+  if (k.p > r.p + 0.005) {
+    const g = offGain(K, R);
+    out.push(g ? `打 ${tn(K.tile)} ${g}，但点炮概率${pctStr(k.p)}，点了要包 3 家约 ${Math.round(k.pay)} 分，不划算`
+      : `打 ${tn(K.tile)} 点炮概率${pctStr(k.p)}，进攻也不比打 ${tn(R.tile)} 强`);
+    if (k.why && k.why[0]) out.push(`${tn(K.tile)}：${k.why[0]}`);
+    out.push(r.p <= 0 ? `打 ${tn(R.tile)}：${r.why && r.why[0] ? r.why[0] : '不会点炮'}` : `打 ${tn(R.tile)} 点炮概率${pctStr(r.p)}，更划算`);
+  } else {
+    const g = offGain(R, K);
+    out.push(`打 ${tn(R.tile)} ${g || '进攻更好'}，点炮概率${pctStr(r.p)}，值得冒险`);
+    if (r.p > 0 && r.why && r.why[0]) out.push(`${tn(R.tile)}：${r.why[0]}`);
+    out.push(`打 ${tn(K.tile)} 更稳，但胡牌机会少得多`);
+  }
+  return out;
+}
+/* one line for the recommended discard when nothing better is close */
+function defenseSolo(R) {
+  const r = R.def;
+  return r.p <= 0 ? `打 ${tn(R.tile)} 进攻最好，${r.why && r.why[0] ? r.why[0] : '也不会点炮'}` : `打 ${tn(R.tile)} 进攻最好，点炮概率${pctStr(r.p)}，值得冒险`;
+}
+/* EV gap (points) -> verdict */
+const defVerdict = gap => gap >= 3 ? 'bad' : gap >= 1 ? 'ok' : 'good';
 function analyzeSelf(d) {
   const st = d.snap, o = d.o, a = d.a, pl = st.players[0];
   const out = { kind: 'self', verdict: 'good', type: null, msg: '', sev: 0, xun: d.xun, a, hand: pl.hand.slice() };
@@ -1845,28 +2056,39 @@ function analyzeSelf(d) {
   const eng = G.AI.selfTurn(st, 0, o);
   const recTile = tb.eng[0].tile, recTing = o.tingOptions.some(x => x.tile === recTile);
   out.rec = { type: 'discard', tile: recTile, ting: recTing };
-  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, fake: !!r.fake, uk: r.uk, ug: r.ug, un: r.un, goodTiles: r.goodTiles, normTiles: r.normTiles, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger, wb: r.wb || null, lv: r.lv || null, tieGroup: !!r.tieGroup }));
+  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, fake: !!r.fake, uk: r.uk, ug: r.ug, un: r.un, goodTiles: r.goodTiles, normTiles: r.normTiles, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger, def: r.def ? { p: r.def.p, why: r.def.why, ev: r.def.ev, gain: r.def.gain, pay: r.def.pay } : null, wb: r.wb || null, lv: r.lv || null, tieGroup: !!r.tieGroup }));
   out.tie = tb.tie;
   out.rem = tb.rem;
   const K = byT[a.tile], R = byT[recTile];
   const B = tb.rows.filter(r => r.s === tb.minS).sort(effCmp)[0];
   const threats = G.threatsFor(st, 0);
-  out.k = { tile: K.tile, s: K.s, fake: !!K.fake, uk: K.uk, ug: K.ug, un: K.un, danger: K.danger }; out.threats = threats;
+  out.k = { tile: K.tile, s: K.s, fake: !!K.fake, uk: K.uk, ug: K.ug, un: K.un, danger: K.danger, dp: K.def ? K.def.p : null }; out.threats = threats;
   // 进张 text; an unusable 听牌 row first says why it is only 一向听
   const uks = r => r.fake ? `${fakeTingStr(r)}，算一向听，${ukStr(r)}` : ukStr(r);
   const sk = r => r.fake ? uks(r) : `${sName(r.s)}，${ukStr(r)}`;
   let v = 'good', type = null, msg = '', sev = 0;
   const note = t => { try { return routeNote(pl.hand, pl.melds, tb.rem, t); } catch (e) { return { doing: '', also: '' }; } };
-  if (K.tile === R.tile && tb.tie && K.lv) {
+  if (threats.length && K.def && R.def && (K.tile === R.tile || Math.abs(K.def.p - R.def.p) > 0.005)) {
+    // someone has 报听 and the two discards differ in risk: judged by EV (点炮概率 × 赔分 vs 胡牌机会 × 得分);
+    // equally safe discards fall through to the usual 牌效 grading below
+    const gap = R.def.ev - K.def.ev;
+    out.def = { gap, k: K.def, r: R.def };
+    if (K.tile === R.tile) {
+      const alt = tb.rows.filter(r => r.def && r.tile !== R.tile).sort((x, y) => (y.def.gain - x.def.gain) || (x.def.p - y.def.p))[0];
+      const safest = tb.rows.filter(r => r.def && r.tile !== R.tile).sort((x, y) => (x.def.p - y.def.p) || (y.def.ev - x.def.ev))[0];
+      msg = `${K.s === 0 ? `听 ${waitsStr(K, tb.rem)}` : sk(K)}，和推荐一致；` + (alt && alt.def.gain > R.def.gain + 0.2 && alt.def.p > R.def.p ? defenseCmp(R, alt).join('；')
+        : safest && safest.def.p < R.def.p ? defenseCmp(R, safest).join('；') : defenseSolo(R));
+    } else {
+      v = defVerdict(gap);
+      if (v === 'good') msg = `和推荐（打 ${tn(R.tile)}）差不多：期望只差约 ${Math.max(0, gap).toFixed(1)} 分；${tn(K.tile)} 点炮概率${pctStr(K.def.p)}`;
+      else { type = K.def.p > R.def.p ? 'danger' : (K.s > R.s ? 'shanten' : 'efficiency'); msg = `${threats.map(q => NAMES[q]).join('、')} 已报听；` + defenseCmp(R, K).join('；'); sev = 6 + gap * 3; }
+    }
+  } else if (K.tile === R.tile && tb.tie && K.lv) {
     const O = byT[tb.tie.over];
     msg = `${sk(K)}，和推荐一致；${tieWhy(R, O)}；${lostStr(R, O)}`;
   } else if (K.tile === R.tile) {
     const nk = K.s > 0 ? note(K.tile) : null;
     msg = K.s === 0 ? `听 ${waitsStr(K, tb.rem)}，能胡的还剩 ${K.winRem} 张` : `${K.fake ? uks(K) : `${sName(K.s)}，${ukStr(K)}`}，和推荐一致${nk.doing ? `，在做${nk.doing}` : ''}${nk.also ? `；${nk.also}` : ''}`;
-  } else if (threats.length && K.danger > R.danger && K.danger >= 3) {
-    v = (K.danger >= 6 && R.danger <= 2) ? 'bad' : 'ok'; type = 'danger';
-    msg = `${threats.map(q => NAMES[q]).join('、')} 已报听：${tn(K.tile)} 是 6 点以上的危险牌，打 ${tn(R.tile)} 更安全`;
-    sev = 12 + K.danger * 2;
   } else if (K.s > tb.minS) {
     const ref = R.s === tb.minS ? R : B;
     v = 'bad'; type = K.fake && ref.s === 0 ? 'tingLegal' : 'shanten';
@@ -2033,7 +2255,7 @@ function analyzeRecord(rec) {
     let di = -1; for (let i = rec.decisions.length - 1; i >= 0; i--) { const d = rec.decisions[i]; if (d.kind === 'self' && d.a.type === 'discard' && d.a.tile === r.tile) { di = i; break; } }
     let it = items.find(x => x.di === di);
     const note = `这张点炮给 ${NAMES[r.winner]}（${r.mode === 'baohu' ? '没报听点炮包胡，一人付 ' + loss : '已报听，三家分摊，你付 ' + loss} 分）`;
-    if (it) { it.key = 'fangpao'; it.msg = note + '。' + it.msg; it.sev += 30 + loss; if (it.verdict === 'good' && it.k && it.k.danger >= 6) it.verdict = 'ok'; if (!it.type || it.verdict === 'good') it.type = it.verdict === 'good' ? it.type : (it.type || 'fangpao'); it.fp = true; }
+    if (it) { it.key = 'fangpao'; it.msg = note + '。' + it.msg; it.sev += 30 + loss; if (it.verdict === 'good' && it.k && (it.k.dp != null ? it.k.dp >= 0.1 : it.k.danger >= 6)) it.verdict = 'ok'; if (!it.type || it.verdict === 'good') it.type = it.verdict === 'good' ? it.type : (it.type || 'fangpao'); it.fp = true; }
     else if (di >= 0) {
       const d = rec.decisions[di];
       it = { kind: 'self', verdict: 'info', type: 'fangpao', key: 'fangpao', fp: true, auto: true, msg: note + '。报听后只能打摸到的牌，这是听牌后的风险。', sev: 30 + loss, xun: d.xun, a: d.a, di, hand: d.snap.players[0].hand.slice(), rec: null };
@@ -2154,7 +2376,7 @@ const DRILLS = {
   xiaolv: { name: '牌效题', desc: '14 张手牌，打哪张牌效最好？（向听远看总进张，一向听看好进张，差不多时留龙）' },
   tingpai: { name: '听牌题', desc: '13 张手牌，听哪几张？能不能报听？' },
   baoting: { name: '报听选择', desc: '几种报听打法，哪种最好？' },
-  fangshou: { name: '防守题', desc: '对手已报听，打哪张最安全？' },
+  fangshou: { name: '防守题', desc: '对手已报听，打哪张最划算？（点炮概率 vs 进攻）' },
   suanfen: { name: '算分题', desc: '胡牌了，每家各付多少？' }
 };
 const STOP = { stop: true };
@@ -2173,7 +2395,9 @@ async function simCapture(rng, want, maxRounds) {
 }
 function seenOf(st) {
   return { ponds: st.players.map(pl => pl.discards.filter(d => !d.claimed).map(d => ({ t: d.t, tm: !!d.tingMark, at: !!d.afterTing }))),
-    melds: st.players.map(pl => pl.melds.map(m => ({ type: m.type, tile: m.tile }))), ting: st.players.map(pl => pl.ting), dealer: st.dealer, left: st.back - st.front };
+    melds: st.players.map(pl => pl.melds.map(m => ({ type: m.type, tile: m.tile }))), ting: st.players.map(pl => pl.ting), dealer: st.dealer, left: st.back - st.front,
+    // tiles anyone discarded face up after that player's 报听 (he did not 胡 them)
+    passed: st.players.map((pl, q) => pl.ting ? G.threatView(st, q).passed : []) };
 }
 /* remaining counts from Kevin's view computed purely from question data (hand + seen) */
 function remFromSeen(hand, seen) {
@@ -2255,6 +2479,34 @@ async function genBaoting(rng) {
     return { id: mkId('baoting', rng), type: 'baoting', hand: sorted(me.hand), drawn: me.drawn, melds: me.melds.map(m => ({ type: m.type, tile: m.tile })), seen, rows, answer: ans };
   }, 60);
 }
+/* 读牌 views of every 报听 player (seat > 0) from question data */
+function threatViewsFromSeen(seen) {
+  const out = [];
+  seen.ting.forEach((x, q) => {
+    if (!x || q === 0) return;
+    const pond = seen.ponds[q], melds = seen.melds[q] || [];
+    out.push({ q, ag: melds.filter(m => m.type === 'angang').length,
+      v: { q, nm: melds.length, melds, pre: pond.filter(d => !d.tm && !d.at).map(d => d.t), post: pond.filter(d => d.at).map(d => d.t), passed: (seen.passed && seen.passed[q]) || [] } });
+  });
+  return out;
+}
+/* 防守题 rows: every discard of a 14-tile hand with offense (向听/进张) + 点炮概率 + EV; answer = best EV (within 0.3) */
+function evRowsFromSeen(hand, melds, seen) {
+  const rem = remFromSeen(hand, seen), nm = (melds || []).length, c = G.counts(hand), cands = [];
+  for (let t = 0; t < 34; t++) if (c[t]) {
+    c[t]--;
+    const e = G.ukeireEff(c, nm, rem), x = { tile: t, s: e.s, fake: !!e.fake, ukeire: e.uk, uk: e.uk, ug: e.ug, un: e.un || 0 };
+    if (e.s === 0) { x.waits = e.waits; x.wb = G.waitBases(c, melds || [], e.waits); }
+    c[t]++; cands.push(x);
+  }
+  const di = G.defenseCore(hand, rem, threatViewsFromSeen(seen), seen.left, 0);
+  G.addDefense(cands, di, rem);
+  const rows = cands.map(x => ({ tile: x.tile, s: x.s, fake: x.fake, uk: x.uk, ug: x.ug, waits: x.waits || null, p: x.def.p, why: x.def.why, pay: x.def.pay, gain: x.def.gain, ev: x.def.ev,
+    pq: x.def.pq || null })).sort((a, b) => b.ev - a.ev);
+  rows.forEach(r => { r.def = { p: r.p, why: r.why, pay: r.pay, gain: r.gain, ev: r.ev }; });
+  const best = rows[0].ev, answer = rows.filter(r => r.ev >= best - 0.3).map(r => r.tile);
+  return { rows, answer };
+}
 /* safety tiers vs 报听 players: 0 绝对安全 / 1 较安全 / 2 一般 / 3 危险 */
 function safetyTier(t, hand, seen) {
   const reasons = [];
@@ -2295,15 +2547,14 @@ async function genFangshou(rng) {
       const x = s.wall[wi]; s.wall[wi] = hand[i]; hand[i] = x;
     }
     if (G.counts(hand).some(x => x > 4)) return null;
-    const seen = seenOf(s);
-    const kinds = [...new Set(hand)];
-    const rows = kinds.map(t => Object.assign({ tile: t }, safetyTier(t, hand, seen)));
-    const minT = Math.min(...rows.map(r => r.tier)), ans = rows.filter(r => r.tier === minT).map(r => r.tile);
-    if (ans.length > 3 || rows.filter(r => r.tier >= 2).length < 4) return null;
+    const seen = seenOf(s), melds = me.melds.map(m => ({ type: m.type, tile: m.tile }));
+    // answer by EV: 点炮概率 × 要赔的分 vs 进攻 (胡牌机会 × 得分)
+    const { rows, answer: ans } = evRowsFromSeen(hand, melds, seen);
+    if (ans.length > 3 || rows.filter(r => r.p >= 0.05).length < 3) return null;
     const threats = G.threatsFor(s, 0).map(q => ({ p: q, waits: s.players[q].waits.slice() }));
-    // the "safest" answer must also be truly safe (no 振听 rule: a 现物 can still be a winning tile)
+    // keep the reveal readable: the best-EV answer is not actually his winning tile
     if (ans.some(t => threats.some(x => x.waits.includes(t) && G.pts(t) >= 6))) return null;
-    return { id: mkId('fangshou', rng), type: 'fangshou', v16: 1, hand: sorted(hand), drawn: null, melds: me.melds.map(m => ({ type: m.type, tile: m.tile })), seen, threats, rows, answer: ans };
+    return { id: mkId('fangshou', rng), type: 'fangshou', v16: 1, v19: 1, hand: sorted(hand), drawn: null, melds, seen, threats, rows, answer: ans };
   }, 60);
 }
 function payFor(sc) {
@@ -2429,15 +2680,14 @@ function normQ(q) {
     if (!q.v18 && q.hand && q.seen) { try { const mn = Math.min(...q.rows.map(r => r.s)); addLv(q.rows, q.hand, q.melds, remFromSeen(q.hand, q.seen), r => r.s === mn); } catch (e) { /* keep old rows */ } q.v18 = 1; }
     q.answer = effAnswer(q.rows);
   }
-  /* 防守题 saved before the 报听 tile was face down: re-grade without peeking at it */
-  if (q && q.type === 'fangshou' && q.rows && q.rows.length && q.seen && !q.v16) {
-    q.rows = q.rows.map(r => Object.assign({}, r, safetyTier(r.tile, q.hand, q.seen)));
-    const minT = Math.min(...q.rows.map(r => r.tier)); q.answer = q.rows.filter(r => r.tier === minT).map(r => r.tile); q.v16 = 1;
+  /* 防守题 saved before v19 (safety tiers): re-grade by EV (点炮概率 + 进攻) from the question's own data */
+  if (q && q.type === 'fangshou' && q.hand && q.seen && !q.v19) {
+    try { const e = evRowsFromSeen(q.hand, q.melds || [], q.seen); q.rows = e.rows; q.answer = e.answer; q.v16 = 1; q.v19 = 1; } catch (err) { /* keep old rows */ }
   }
   return q;
 }
 
-const api = { effRank, tieKey, tieWhy, addLv, lvStr, fakeTingStr, rowSName, routeInfo, routesFor, routeNote, routeScore, stepStr, qiduiS, yitiaoS, ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
+const api = { pctStr, offGain, defenseCmp, defenseSolo, defVerdict, evRowsFromSeen, threatViewsFromSeen, effRank, tieKey, tieWhy, addLv, lvStr, fakeTingStr, rowSName, routeInfo, routesFor, routeNote, routeScore, stepStr, qiduiS, yitiaoS, ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
   exportText, handStats, aggregate, genQuestion, checkAnswer, safetyTier, remFromSeen, payFor, tingRows, bestTing, waitClass, simCapture, setYield, seenOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDDT = api;
@@ -2871,7 +3121,9 @@ function renderMe() {
     const it = (drawn === rec ? items.slice().reverse() : items).find(x => x.t === rec);
     if (it) { it.cls += ' rec'; recDone = true; }
   }
-  let html = items.map(x => tileHTML(x.t, 'lg', x.cls, `data-t="${x.t}" data-d="${x.isDrawn ? 1 : 0}"`)).join('');
+  const risk = h && h.risk && clickable && !tingMode ? h.risk : null;
+  const rb = t => { if (!risk || risk[t] == null) return ''; const p = risk[t], lv = p <= 0 ? 0 : p < 0.1 ? 1 : p < 0.2 ? 2 : 3; return `<span class="dpct d${lv}" title="点炮概率">${p <= 0 ? '0' : p < 0.01 ? '&lt;1' : Math.round(p * 100)}%</span>`; };
+  let html = items.map(x => tileHTML(x.t, 'lg', x.cls + (risk ? ' hasr' : ''), `data-t="${x.t}" data-d="${x.isDrawn ? 1 : 0}"`).replace(/<\/div>$/, rb(x.t) + '</div>')).join('');
   if (st.result && st.result.type === 'win' && st.result.winner === 0) html = st.result.hand.map(t => tileHTML(t, 'lg')).join('');
   sizeHand(items.length, drawn != null, me.melds);
   $('myhand').innerHTML = `<div class="hrow">${html}</div>`;
@@ -2964,16 +3216,27 @@ function computeHint(rem) {
     const o = pending.o;
     if (o.ting) return o.hu ? { rec: null, short: `摸到 ${G.tname(me.drawn)}，可以自摸！`, text: '' } : { rec: null, short: '', text: '' };
     const ev = G.evalDiscards(st, 0), b = ev[0], name = G.tname(b.tile);
+    const threats = G.threatsFor(st, 0), TT0 = window.KDDT;
+    // someone has 报听: 点炮概率 badge on every hand tile + EV verdict (risk vs reward)
+    let risk = null, dtext = '';
+    if (threats.length && b.def && TT0 && TT0.defenseCmp) {
+      risk = {}; for (const x of ev) risk[x.tile] = x.def.p;
+      const off = ev.slice().sort((x, y) => (y.def.gain - x.def.gain) || (x.def.p - y.def.p))[0];
+      const safest = ev.slice().sort((x, y) => (x.def.p - y.def.p) || (y.def.ev - x.def.ev))[0];
+      const lines = off !== b && off.def.gain > b.def.gain + 0.2 && off.def.p > b.def.p ? TT0.defenseCmp(b, off) : safest !== b && safest.def.p < b.def.p ? TT0.defenseCmp(b, safest) : [TT0.defenseSolo(b)];
+      const top = ev.filter(x => x.def.p > 0).sort((x, y) => y.def.p - x.def.p).slice(0, 3);
+      dtext = `<div class="hdef"><b>${threats.map(i => NAMES[i]).join('、')} 已报听</b>${lines.map(l => `<div>· ${l}</div>`).join('')}` +
+        (top.length ? `<div class="hrisk">${top.map(x => `<span>${G.tname(x.tile)} <b>${TT0.pctStr(x.def.p)}</b>：${x.def.why[0] || ''}</span>`).join('')}</div>` : '') + `</div>`;
+    }
+    const pshort = x => x.def ? (x.def.p <= 0 ? ' · 不会点炮' : ` · 点炮${TT0.pctStr(x.def.p)}`) : '';
     if (b.s === 0 && b.legal && o.tingOptions.some(x => x.tile === b.tile)) {
       const lw = b.waits.filter(w => b.wb && b.wb[w].longs.length && G.pts(w) >= 3);
       const lt = lw.length ? `；胡 ${lw.map(w => G.tname(w)).join('/')} 成<b>${longNames(b.wb[lw[0]].longs)}</b>，底分 ${b.wb[lw[0]].base}（代替牌点）` : '';
-      return { rec: b.tile, short: `打 <b>${name}</b> 可报听${lw.length ? ' · 有龙' : ''}`, text: `打 <b>${name}</b> 后点「听」报听：听 ${b.waits.map(w => waitLabel(w, rem, b.wb)).join(' ')}${lt}` };
+      return { rec: b.tile, risk, short: `打 <b>${name}</b> 可报听${lw.length ? ' · 有龙' : ''}${risk ? pshort(b) : ''}`, text: `${dtext}打 <b>${name}</b> 后点「听」报听：听 ${b.waits.map(w => waitLabel(w, rem, b.wb)).join(' ')}${lt}` };
     }
-    const threats = G.threatsFor(st, 0);
-    const off = ev.slice().sort((x, y) => (-y.s * 100 + y.val + y.bias) - (-x.s * 100 + x.val + x.bias))[0];
-    if (threats.length && off.tile !== b.tile) {
-      const why = G.pts(b.tile) < 6 ? '1–5 点的牌别人不能点炮胡，绝对安全' : (b.danger === 0 ? '报听的人报听后打过这张，安全' : '这张相对安全');
-      return { rec: b.tile, short: `打 <b>${name}</b> · 防守`, text: `${threats.map(i => NAMES[i]).join('、')} 已报听，你离听牌还远，先防守：打 <b>${name}</b>，${why}。` };
+    if (risk) {
+      const tail = b.s === 0 ? `打后听 ${ws(b.waits)}` : `打后${b.fake ? '算一向听' : TT0.sName(b.s)}，进 ${b.ukeire} 张（<b class="ukg">好 ${b.ug}</b>）`;
+      return { rec: b.tile, risk, short: `打 <b>${name}</b>${pshort(b)}`, text: `${dtext}${tail}。` };
     }
     const tp = G.pts(b.tile);
     let short, reason;
@@ -3301,7 +3564,7 @@ function showRules() {
   <h3>报听与点数</h3><ul><li><b>必须报听才能胡</b>；报听后手牌锁定，只能打出摸到的牌。</li><li>报听时打的那张要<b>扣着打</b>（牌背朝上）：别人看不到是什么牌，也<b>不能碰、杠、胡</b>这张；本局结束后才翻开。你自己扣的那张只有你看得到（半透明、虚线框）。</li><li>数字牌按面值算点，字牌 10 点；听口里要有 6 点以上的牌才能报听。</li><li>1–2 点不能胡；3–5 点只能自摸；6 点以上自摸、点炮都能胡。</li></ul>
   <h3>算分</h3><ul><li>得分 = 底分（没有龙时 = 胡的那张牌的点数；有龙时 = 每种龙 20）；自摸 ×2；每个暗杠再 ×2。</li><li>自摸：三家各付一份。点炮：没报听的人点炮 → 一个人包三家；已报听的人点炮 → 三家各付一份。</li><li>不带耗子、不带庄分；牌墙摸完没人胡算流局，庄家没胡就轮庄。</li></ul>
   <h3>龙（加分牌型）</h3><ul><li><b>青龙</b>：清一色，整手牌连副露都是同一门数字牌，没有字牌，什么牌型都行。</li><li><b>七对龙</b>：七对胡牌，只能门清；四张一样的算两对。</li><li><b>一条龙</b>：普通牌型里有同一门的 123、456、789 三组顺子（门清，不能吃）。</li><li>每种龙底分 <b>20</b>，可以叠加：青龙 + 七对龙 = 40，青龙 + 一条龙 = 40（七对龙和一条龙不会同时出现）。有龙时<b>底分代替胡牌那张的点数</b>，再算自摸 ×2、暗杠 ×2。</li><li>注意：<b>能不能胡仍然看胡的那张牌</b>——要报听、听口要有 6 点以上才能报听；胡 1–2 点的牌不能胡，3–5 点只能自摸，6 点以上才能点炮胡，有龙也一样。</li><li>例：青龙 20 + 七对龙 20 = 40 × 自摸 2 = 80 分，三家各付 80。</li></ul>
-  <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数（离听牌越近越好）。离听牌还差 2 步以上时，先比<b>总进张</b>，牌越宽越好，总进张一样再比好进张；只差 1 步（一向听）时，先比<b class="ukg">好进张</b>，好进张一样再比总进张。两种打法向听一样、进张只差 <b>10% 以内</b>时，优先选<b>能保留龙</b>（一条龙、七对龙、青龙）的打法：龙底分越高越好，一样再看离龙更近的。都一样时才看孤张字牌、点数等小细节。</li></ul>
+  <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数（离听牌越近越好）。离听牌还差 2 步以上时，先比<b>总进张</b>，牌越宽越好，总进张一样再比好进张；只差 1 步（一向听）时，先比<b class="ukg">好进张</b>，好进张一样再比总进张。两种打法向听一样、进张只差 <b>10% 以内</b>时，优先选<b>能保留龙</b>（一条龙、七对龙、青龙）的打法：龙底分越高越好，一样再看离龙更近的。都一样时才看孤张字牌、点数等小细节。</li><li><b>有人报听时</b>：手牌上的小数字是这张牌的<b>点炮概率</b>（1–5 点的牌不能点炮，是 0%；他报听后自己打过、或别人打过他没胡的牌也是 0%）。概率按他的副露、弃牌和场上见过的牌估算，标“约”。推荐比较期望得分：进攻多出的胡牌机会 × 胡牌得分，减去点炮概率 × 要赔的分（没报听点炮要包 3 家）。</li></ul>
   <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>右上角的对话气泡按钮是「语音报牌」：点一下开 / 关，开着时会念出每张打出的牌，以及碰、杠、听、胡、自摸；和音效按钮分开控制。<b>长按</b>（电脑上点<b>右键</b>）这个按钮可以<b>选声音</b>和语速，大厅右上角的「语音」也能进；默认自动挑这台设备上最自然的中文声音。<button class="lnk" id="rulesVoice">选声音 ›</button></li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li><li>电脑：鼠标点选、再点打出；键盘 <b>← →</b> 选牌，<b>Enter</b> 或 <b>↑</b> 打出，<b>空格</b> 过，<b>H</b> 胡 · <b>P</b> 碰 · <b>G</b> 杠 · <b>T</b> 听，<b>Esc</b> 取消，<b>F</b> 全屏。</li></ul></div>
   <div class="mfoot"><button class="gbtn" id="closeRules2">知道了</button></div>`);
   $('closeRules').onclick = hideModal; $('closeRules2').onclick = hideModal; $('rulesVoice').onclick = () => showVoicePicker(showRules);
@@ -3384,6 +3647,7 @@ if (!window.KDDT || /[?&](seed=|play)/.test(location.search)) startRound();
 /* review verdict text; a 碰/杠 judgement with several reasons is shown as a short list */
 function vmHTML(it) {
   const m = it.msg || '';
+  if (it.def && m.indexOf('；') >= 0) return `<div class="vm"><ul class="vml">${m.split('；').map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
   if (it.kind !== 'claim' || m.indexOf('；') < 0) return `<div class="vm">${esc(m)}</div>`;
   const ci = m.indexOf('：'), hd = ci > 0 && ci <= 10 ? m.slice(0, ci) : '', body = hd ? m.slice(ci + 1) : m;
   return `<div class="vm">${hd ? esc(hd) + '：' : ''}<ul class="vml">${body.split('；').map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
@@ -3573,6 +3837,16 @@ function selBox(label) {
   return `<div class="selbox">${label} ${tl(D.selT, 'tk')} <b>${tn(D.selT)}</b>？</div><div class="sbtns next"><button class="gbtn sm" data-act="confirm">确定打 ${tn(D.selT)}</button></div>`;
 }
 const TIERL = ['安全', '较安全', '一般', '危险'];
+/* 点炮概率 level / short text */
+const dLv = p => p <= 0 ? 0 : p < 0.1 ? 1 : p < 0.2 ? 2 : 3;
+const dTxt = p => p <= 0 ? '0%' : p < 0.01 ? '&lt;1%' : Math.round(p * 100) + '%';
+/* per-tile 点炮概率 table (6+ point tiles one per row with reasons; 1–5 point tiles in one row) */
+function riskTable(rows, ans, mine) {
+  const hi = rows.filter(r => G.pts(r.tile) >= 6).sort((a, b) => b.p - a.p), lo = rows.filter(r => G.pts(r.tile) < 6).sort((a, b) => a.tile - b.tile);
+  const cls = r => ans && ans.includes(r.tile) ? 'ans' : r.tile === mine ? 'mine' : '';
+  return `<div class="dtab">${hi.map(r => `<div class="dr ${cls(r)}">${tl(r.tile, 'tp')}<em class="rsk d${dLv(r.p)}">${r.p > 0 ? '约 ' : ''}${dTxt(r.p)}</em><span class="dw">${esc((r.why || []).join('；'))}</span></div>`).join('')}` +
+    (lo.length ? `<div class="dr">${lo.map(r => tl(r.tile, 'tp')).join('')}<em class="rsk d0">0%</em><span class="dw">不到 6 点，不能点炮</span></div>` : '') + `</div>`;
+}
 /* unusable 听牌 row (no live 6+ point wait, ranked as 一向听): short reason */
 const fakeShort = r => r.waits ? `听 ${r.waits.map(tn).join(' ')}（${r.legal ? '6 点以上的已出完' : '不到 6 点，不能报听'}）` : '听口不能报听';
 /* 好进张 detail: a candidate row whose good tiles drop onto a line underneath (tap to expand/collapse) */
@@ -3697,19 +3971,23 @@ function renderDrill() {
     side = (done ? fb(s.res.correct, `最好：打 ${q.answer.map(tn).join(' / ')}`) + why : '<div class="ins">点下面的方案（或手牌里带「可听」的牌），再按「确定」</div>') +
       `<div class="btos">${ordered.map(card).join('')}</div>` + (done ? nextBtn() : (s.selT != null ? `<div class="sbtns next"><button class="gbtn sm" data-act="confirm">确定打 ${tn(s.selT)} 报听</button></div>` : ''));
   } else if (q.type === 'fangshou') {
+    T.normQ(q);
     const th = q.threats.map(x => NAMES[x.p]).join('、');
-    prompt = `<b class="warn">${th} 已报听！</b>打哪张<b>最安全</b>？`;
+    prompt = `<b class="warn">${th} 已报听！</b>打哪张<b>最划算</b>？<span style="font-size:.8em;opacity:.8">（点炮概率 × 赔分 vs 进攻）</span>`;
     board = pondsHTML(q.seen, { threat: true }) + `<div class="legend"><span class="tile tp facedown tingmark kou lg"></span> 报听扣的牌（扣着，看不到）　<span class="aftbox"></span> 报听后打出的牌</div>`;
     const by = {}; q.rows.forEach(r => { by[r.tile] = r; });
     const opt = { melds: q.melds, act: done ? null : 'pick', selT: done ? null : s.selT, selK: done ? null : s.selK };
-    if (done) { opt.badges = {}; opt.marks = {}; q.rows.forEach(r => { opt.badges[r.tile] = { txt: TIERL[r.tier], cls: 't' + r.tier }; }); q.answer.forEach(t => { opt.marks[t] = 'ans'; }); if (!s.res.correct) opt.marks[s.ans] = 'wrong'; }
+    if (done) { opt.badges = {}; opt.marks = {}; q.rows.forEach(r => { opt.badges[r.tile] = { txt: dTxt(r.p), cls: 'd' + dLv(r.p) }; }); q.answer.forEach(t => { opt.marks[t] = 'ans'; }); if (!s.res.correct) opt.marks[s.ans] = 'wrong'; }
     hand = handRow(q.hand, q.drawn, opt);
-    if (!done) side = `<div class="tip">💡 想想哪些牌<b>根本不可能</b>被点炮胡。</div>` + selBox('打');
+    if (!done) side = `<div class="tip">💡 1–5 点的牌不能点炮；6 点以上的牌，想想他可能听什么，再和进张比一比。</div>` + selBox('打');
     else {
       const b = by[q.answer[0]], m = by[s.ans];
-      side = fb(s.res.correct) + `<div class="ex">最安全：<b>${q.answer.map(tn).join(' / ')}</b>（${TIERL[b.tier]}）—— ${b.why}` + (s.res.correct ? '' : `<br>你打 <b>${tn(s.ans)}</b>（${TIERL[m.tier]}）：${m.why}`) + `</div>` +
+      const alt = q.rows.filter(r => r !== b).sort((x, y) => (y.gain - x.gain) || (x.p - y.p))[0];
+      const lines = !s.res.correct && m ? T.defenseCmp(b, m) : alt && alt.gain > b.gain + 0.2 && alt.p > b.p ? T.defenseCmp(b, alt) : [T.defenseSolo(b)];
+      side = fb(s.res.correct, `最划算：打 ${q.answer.map(tn).join(' / ')}`) + `<div class="ex"><ul class="vml">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>` +
+        `<div class="ex"><b>每张牌的点炮概率</b>（估算）${riskTable(q.rows, q.answer, s.ans)}</div>` +
         `<div class="ex reveal">${q.threats.map(x => `${NAMES[x.p]} 实际听：${x.waits.map(w => `<b>${tn(w)}</b>`).join(' ')}`).join('<br>')}</div>` +
-        `<div class="ex small">记住：1–5 点的牌别人不能点炮胡；报听后他自己打掉的牌也安全。</div>` + nextBtn();
+        `<div class="ex small">概率是估算：看他的副露、弃牌和场上见过的牌。值不值得冒险，要和进攻多得的分比。</div>` + nextBtn();
     }
   } else if (q.type === 'suanfen') {
     const sc = q.sc, w = NAMES[sc.winner];
@@ -3875,6 +4153,10 @@ function renderReview() {
   if (it.kind === 'self') {
     if (it.a && it.a.type === 'discard') { marks[it.a.tile] = 'kv'; badges[it.a.tile] = { txt: '你打', cls: it.verdict === 'good' ? 'best' : it.verdict === 'bad' ? 'bad' : 'warn' }; }
     if (it.rec && it.rec.type === 'discard' && (!it.a || it.rec.tile !== it.a.tile)) { marks[it.rec.tile] = 'rc'; badges[it.rec.tile] = { txt: '推荐', cls: 'best' }; }
+    if (it.rows && it.rows.some(r => r.def)) for (const r of it.rows) if (r.def) {
+      const b = badges[r.tile], pt = dTxt(r.def.p);
+      badges[r.tile] = b ? { txt: `${b.txt} ${pt}`, cls: b.cls } : { txt: pt, cls: 'd' + dLv(r.def.p) };
+    }
     hand = handRow(me.hand, me.drawn, { melds: me.melds, marks, badges });
   } else hand = handRow(me.hand, null, { melds: me.melds });
   const lastP = it.kind === 'claim' && sn.lastDiscard ? sn.lastDiscard.p : null;
@@ -3892,7 +4174,7 @@ function renderReview() {
     opts = `<div class="otab uk rvt">${rows.map(r => {
       const isRec = r.tile === recT, isMine = r.tile === myT && !isRec;
       const o1 = r.s === 0 ? (r.legal ? '可报听' : '听(<6点)') : r.fake ? '算一向听' : T.sName(r.s);
-      const dg = (r.danger >= 6 ? ' <em class="dg">危险</em>' : '') + (it.tie && recRow && recRow.lv && r.tieGroup && r.lv && r !== recRow && G.lvBetter(recRow.lv, r.lv) ? ` <em class="lx">${r.lv.base ? '龙更小' : '没' + G.lvName(recRow.lv)}</em>` : '');
+      const dg = (r.def ? ` <em class="rsk d${dLv(r.def.p)}">点炮 ${dTxt(r.def.p)}</em>` : '') + (it.tie && recRow && recRow.lv && r.tieGroup && r.lv && r !== recRow && G.lvBetter(recRow.lv, r.lv) ? ` <em class="lx">${r.lv.base ? '龙更小' : '没' + G.lvName(recRow.lv)}</em>` : '');
       if (r.s === 0 || !rem || !r.goodTiles) return `<div class="orow ${isRec ? 'best' : isMine ? 'mine' : ''}">${tl(r.tile, 'tp')}<span class="o1">${o1}</span><span class="o2">${r.s === 0 ? `听 ${r.waits.map(tn).join(' ')} · 能胡 ${r.winRem}` : `进 ${r.uk}（<b class="ukg">好 ${r.ug}</b> · <span class="ukn">一般 ${r.un}</span>）`}${dg}</span></div>`;
       return ukRow(r, rem, { routes: routesOf(me.hand, me.melds, rem, r.tile), cls: isRec ? 'best' : isMine ? 'mine' : '', open: isRec || isMine, tag: isRec ? '推荐' : isMine ? '你打' : '', hi: isRec ? onlyRec : null,
         o1, o2: (r.fake ? `<b class="ukg">好 ${r.ug}</b> <span class="fkt">${fakeShort(r)}</span>` : T.totalFirst(r.s) ? `<b>进 ${r.uk}</b> <span class="ukn">· 好 ${r.ug} · 一般 ${r.un}</span>` : `<b class="ukg">好 ${r.ug}</b> <span class="ukn">· 一般 ${r.un}</span>`) + dg });
