@@ -666,7 +666,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .vcard.info{border-color:#6cc3ff;background:linear-gradient(180deg,rgba(40,110,170,.4),rgba(0,0,0,.2))}
 .vh{display:flex;align-items:center;gap:6px}.vi{font-size:20px}.vl{font-size:17px;font-weight:900}.vx{margin-left:auto;font-size:12px;color:var(--muted)}
 .vr{display:flex;gap:12px;font-size:13px;margin:4px 0;flex-wrap:wrap}.vr b{color:var(--gold)}
-.vm{font-size:13px;line-height:1.55}
+.vm{font-size:13px;line-height:1.55}.vml{margin:2px 0 0;padding-left:1.15em}.vml li{margin:1px 0}
 .rpos{font-size:13px;color:var(--muted);min-width:44px;text-align:center;font-variant-numeric:tabular-nums}.rpos b{font-size:16px;color:var(--gold)}
 .only{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
 .only input{accent-color:#e7b23c;width:16px;height:16px}
@@ -1611,6 +1611,64 @@ function analyzeSelf(d) {
   return Object.assign(out, { verdict: v, type, msg: msg.replace(/^；/, ''), sev });
 }
 function bestAfter(c, nm) { let b = 99; for (let t = 0; t < 34; t++) if (c[t]) { c[t]--; b = Math.min(b, G.shanten(c, nm)); c[t]++; } return b; }
+/* concrete facts about claiming tile t (碰 / 明杠 / 过) for player 0, used by the review and the in-game hint */
+function claimFacts(st, t, o) {
+  const pl = st.players[0], c = G.counts(pl.hand), nm = pl.melds.length, rem = G.remainingOf(st, 0);
+  const sN0 = G.shantenNormal(c, nm), sQ0 = G.shantenChiitoi(c, nm), s0 = Math.min(sN0, sQ0);
+  let pairs = 0; for (const x of c) pairs += x >> 1;
+  const f = { t, s0, sN0, sQ0, viaQ: nm === 0 && sQ0 < sN0, pairs, rem, gangLeft: rem[t] };
+  // 七对龙 is a realistic route (and a 碰/杠 would kill it: 七对 must be 门清)
+  f.qLive = nm === 0 && (sQ0 <= sN0 || pairs >= 4);
+  const plan = G.longPlan(c, pl.melds);
+  f.qingKill = plan.off <= 5 && (t >= 27 || ((t / 9) | 0) !== plan.suit) ? plan : null;
+  f.threats = G.threatsFor(st, 0);
+  // 过: 进张 of the current 13 tiles
+  f.pass = s0 > 0 ? Object.assign({ s: s0 }, G.ukeireTiers(c, nm, rem, s0)) : { s: 0, uk: 0, ug: 0, un: 0 };
+  if (o.peng) {
+    c[t] -= 2; let best = null;
+    for (let d = 0; d < 34; d++) if (c[d]) {
+      c[d]--;
+      const s = G.shanten(c, nm + 1);
+      const r = s > 0 ? Object.assign({ tile: d, s }, G.ukeireTiers(c, nm + 1, rem, s)) : { tile: d, s, uk: G.waitsOf(c, nm + 1).reduce((a, w) => a + rem[w], 0), ug: 0, un: 0 };
+      if (!best || effCmp(r, best) < 0) best = r;
+      c[d]++;
+    }
+    c[t] += 2; f.peng = best; f.s1 = best ? best.s : 99;
+  }
+  if (o.gang) { c[t] -= 3; f.sG = G.shanten(c, nm + 1); c[t] += 3; }
+  return f;
+}
+const ukShort = (r, s) => totalFirst(s) ? `进 ${r.uk} 张` : `好进张 ${r.ug} 张`;
+/* short concrete reasons (each one sentence) for the 碰/杠/过 decision; rec = recommended action */
+function claimReasons(f, rec) {
+  const t = tn(f.t), out = [], route = f.viaQ ? '（走七对）' : '';
+  if (rec === 'pass') {
+    if (f.threats.length && f.s0 >= 2) out.push(`${f.threats.map(q => NAMES[q]).join('、')} 已报听，你还是${sName(f.s0)}，先防守：碰后手牌少 3 张，安全牌更难凑`);
+    if (f.peng) {
+      if (f.s1 > f.s0) out.push(`碰前${sName(f.s0)}${route}，碰后退成${sName(f.s1)}，离听牌更远`);
+      else if (f.s1 === f.s0) out.push(f.s0 === 0 ? `你已经听牌，碰后还是听牌，没有好处` : `碰前${sName(f.s0)}${route}，碰后还是${sName(f.s1)}，没有离听牌更近`);
+    }
+    if (f.qLive) out.push(f.peng && f.s1 < f.s0 ? `碰后虽能进到${sName(f.s1)}，但你有 ${f.pairs} 对，碰了就不是门清，七对龙做不成了` : `碰了就不是门清，七对龙（底分 ${G.LONG_PTS}）做不成了`);
+    if (f.qingKill) out.push(`你在做青龙（清一色），${t}是杂牌，碰出来青龙就没了`);
+    if (f.peng && f.s1 === f.s0 && f.s0 > 0) {
+      const a = f.pass, b = f.peng, k = totalFirst(f.s0) ? 'uk' : 'ug';
+      if (a[k] > b[k]) out.push(`不碰${ukShort(a, f.s0)}，碰后最多${ukShort(b, f.s0)}，反而更窄`);
+      else if (a[k] === b[k]) out.push(`碰不碰都是${ukShort(a, f.s0)}，碰了也不更宽`);
+      else if (f.qLive || f.qingKill) out.push(`碰后（打 ${tn(b.tile)}）${ukShort(b, f.s0)}，比不碰多 ${b[k] - a[k]} 张，` + (f.qLive ? `但胡了只算牌点，没有龙的 ${G.LONG_PTS} 分` : '但青龙没了'));
+    }
+    if (f.peng && f.gangLeft <= 1) out.push(f.gangLeft ? `${t}只剩 1 张没出现，碰后补杠的机会很小` : `${t}已经没有了，碰后不可能补杠`);
+    if (!out.length) out.push(`碰 ${t} 对牌型没有帮助`);
+  } else if (rec === 'peng') {
+    out.push(`碰后从${sName(f.s0)}${route}进到${sName(f.s1)}`);
+    if (f.peng) out.push(f.s1 === 0 ? `碰后打 ${tn(f.peng.tile)} 就听牌` : `碰后打 ${tn(f.peng.tile)}，${ukShort(f.peng, f.s1)}`);
+    if (f.qLive) out.push(`代价是七对龙做不成了，但离听牌更近更要紧`);
+  } else if (rec === 'gang') {
+    out.push(`杠 ${t} 后还是${sName(f.sG)}，不退向听`);
+    out.push('杠完从牌尾补摸一张，多一次摸牌机会');
+    if (f.qLive) out.push('杠了就不是门清，七对龙做不成了');
+  }
+  return out;
+}
 function analyzeClaim(d) {
   const st = d.snap, t = d.t, o = d.o, a = d.a, pl = st.players[0];
   const out = { kind: 'claim', verdict: 'good', type: null, msg: '', sev: 0, xun: d.xun, a, t, hand: pl.hand.slice() };
@@ -1621,14 +1679,14 @@ function analyzeClaim(d) {
   }
   const eng = G.AI.claim(st, 0, t, o);
   out.rec = { type: eng };
-  const c = G.counts(pl.hand), nm = pl.melds.length, s0 = G.shanten(c, nm);
-  c[t] -= 2; const s1 = bestAfter(c, nm + 1); c[t] += 2;
+  const f = claimFacts(st, t, o), rs = claimReasons(f, eng);
   const L = { peng: '碰', gang: '杠', pass: '过' };
-  if (a === eng) { out.msg = a === 'pass' ? `不${o.peng ? '碰' : '杠'}，正确（${sName(s0)}）` : `${L[a]} ${tn(t)}：${sName(s0)} → ${sName(a === 'peng' ? s1 : s0)}`; return out; }
-  let msg;
-  if (a === 'pass') msg = eng === 'peng' ? `碰 ${tn(t)} 能从${sName(s0)}进到${sName(s1)}` : `杠 ${tn(t)} 不退向听，还能多摸一张`;
-  else if (G.threatsFor(st, 0).length && s0 >= 2) msg = `对手已报听，你还差得远（${sName(s0)}），碰牌只会让手牌更难防守`;
-  else msg = `${L[a]} ${tn(t)} 后还是${sName(a === 'peng' ? s1 : s0)}，没有前进，还暴露了手牌`;
+  if (a === eng) { out.msg = (a === 'pass' ? `不${o.peng ? '碰' : '杠'}，正确` : `${L[a]} ${tn(t)}，正确`) + '：' + rs.join('；'); return out; }
+  let lead = '';
+  if (a === 'gang' && f.sG > f.s0) lead = `杠 ${tn(t)} 要拿走 3 张，退成${sName(f.sG)}`;
+  else if (a === 'peng' && eng === 'gang') lead = `能杠就别只碰：杠不退向听，还多摸一张`;
+  const msg = (lead ? [lead] : []).concat(eng === 'gang' && lead ? [] : rs).join('；');
+  out.reasons = rs;
   return Object.assign(out, { verdict: 'ok', type: 'claim', msg, sev: 4 });
 }
 function analyzeRecord(rec) {
@@ -2035,7 +2093,7 @@ function checkAnswer(q, ans) {
 /* 牌效题 saved under an older ranking (错题本) are re-graded with the current rule */
 function normQ(q) { if (q && q.type === 'xiaolv' && q.rows && q.rows.length) q.answer = effAnswer(q.rows); return q; }
 
-const api = { ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, analyzeRecord,
+const api = { ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
   exportText, handStats, aggregate, genQuestion, checkAnswer, safetyTier, remFromSeen, payFor, tingRows, bestTing, waitClass, simCapture, setYield, seenOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDDT = api;
@@ -2509,8 +2567,13 @@ function computeHint(rem) {
   }
   if (pending && pending.kind === 'claim') {
     const d = G.AI.claim(st, 0, pending.t, pending.o);
-    const m = { hu: ['可以胡！', ''], gang: ['建议杠', '杠了不影响你的牌型。'], peng: ['建议碰', '碰了能离听牌更近一步。'], pass: ['建议过', '碰了对牌型没帮助，反而让手牌变少、变死。'] };
-    return { rec: null, short: m[d][0], text: m[d][1] };
+    const m = { hu: ['可以胡！', ''], gang: ['建议杠', '杠了不影响你的牌型。'], peng: ['建议碰', '碰了能离听牌更近一步。'], pass: ['建议过', '碰了对牌型没帮助。'] };
+    let text = m[d][1];
+    const T = window.KDDT;
+    if (d !== 'hu' && T && T.claimFacts) {
+      try { const rs = T.claimReasons(T.claimFacts(st, pending.t, pending.o), d); if (rs.length) text = rs.join('；') + '。'; } catch (e) { console.error(e); }
+    }
+    return { rec: null, short: m[d][0], text };
   }
   if (me.ting) return { rec: null, short: '', text: '' };
   if (me.hand.length === 13 - 3 * me.melds.length) {
@@ -2828,6 +2891,13 @@ if (!window.KDDT || /[?&](seed=|play)/.test(location.search)) startRound();
 /* ===== 训练界面：菜单 / 专项练习 / 错题本 / 我的数据 / 复盘 / 导出 ===== */
 (function () {
 'use strict';
+/* review verdict text; a 碰/杠 judgement with several reasons is shown as a short list */
+function vmHTML(it) {
+  const m = it.msg || '';
+  if (it.kind !== 'claim' || m.indexOf('；') < 0) return `<div class="vm">${esc(m)}</div>`;
+  const ci = m.indexOf('：'), hd = ci > 0 && ci <= 10 ? m.slice(0, ci) : '', body = hd ? m.slice(ci + 1) : m;
+  return `<div class="vm">${hd ? esc(hd) + '：' : ''}<ul class="vml">${body.split('；').map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+}
 const G = window.KDD, T = window.KDDT, U = window.KDDUI;
 if (!T || !U) return;
 const $ = id => document.getElementById(id);
@@ -3331,7 +3401,7 @@ function renderReview() {
   }
   const claimInfo = it.kind === 'claim' ? `<div class="ex">${NAMES[lastP]} 打出 ${tl(it.t, 'tp')}，你可以${[d.o.hu && '胡', d.o.peng && '碰', d.o.gang && '杠'].filter(Boolean).join(' / ')}</div>` : '';
   const side = `<div class="vcard ${it.verdict}"><div class="vh"><span class="vi">${it.fp ? '💥' : V.ic}</span><span class="vl">${it.fp ? '放炮' : V.lb}</span><span class="vx">第 ${it.xun} 巡</span></div>` +
-    `<div class="vr"><span>你：<b>${actStr(it)}</b></span>${it.rec ? `<span>推荐：<b>${recActStr(it.rec)}</b></span>` : ''}</div><div class="vm">${esc(it.msg)}</div>${cmp}</div>${claimInfo}${opts}`;
+    `<div class="vr"><span>你：<b>${actStr(it)}</b></span>${it.rec ? `<span>推荐：<b>${recActStr(it.rec)}</b></span>` : ''}</div>${vmHTML(it)}${cmp}</div>${claimInfo}${opts}`;
   const nav = `<label class="only"><input type="checkbox" data-act="revOnly" ${R.only ? 'checked' : ''}><span>只看问题手</span></label>` +
     `<div class="rnav"><button class="nbtn" data-act="revPrev" ${pos <= 0 ? 'disabled' : ''} aria-label="上一手">‹</button><span class="rpos"><b>${pos + 1}</b>/${list.length}</span><button class="nbtn pri" data-act="revNext" ${pos >= list.length - 1 ? 'disabled' : ''} aria-label="下一手">›</button></div>` +
     `<button class="gbtn sm ghost" data-act="export">导出</button>`;
