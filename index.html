@@ -958,11 +958,12 @@ function structB(c, nm) {
 /* c: 13-tile counts (restored on return); rem: remaining copies per kind; s: shanten(c) (computed if omitted).
    returns { good:[kinds], norm:[kinds], ug, un, uk, kinds } with counts weighted by rem */
 /* 14-tile counts c with shanten 0: can some discard leave a legal 报听 (a 6+ point winning tile)? */
-function canBaotingAfter(c, nm) {
+/* rem (optional): tiles still unseen; a wait counts only if at least one copy is left (no dead waits) */
+function canBaotingAfter(c, nm, rem, drawn) {
   for (let d = 0; d < 34; d++) if (c[d]) {
     c[d]--;
     let ok = false;
-    if (shanten(c, nm) === 0) for (let w = 0; w < 34 && !ok; w++) if (pts(w) >= 6 && c[w] < 4) { c[w]++; ok = isWin(c, nm); c[w]--; }
+    if (shanten(c, nm) === 0) for (let w = 0; w < 34 && !ok; w++) if (pts(w) >= 6 && c[w] < 4 && (!rem || rem[w] - (w === drawn ? 1 : 0) > 0)) { c[w]++; ok = isWin(c, nm); c[w]--; }
     c[d]++;
     if (ok) return true;
   }
@@ -978,7 +979,7 @@ function ukeireTiers(c, nm, rem, s) {
     const s1 = shanten(c, nm);
     if (s1 < s) {
       const q1 = shantenChiitoi(c, nm);
-      const good = structB(c, nm) > b0 || (q1 === s1 && q1 < q0) || (s1 === 0 && canBaotingAfter(c, nm));
+      const good = structB(c, nm) > b0 || (q1 === s1 && q1 < q0) || (s1 === 0 && canBaotingAfter(c, nm, rem, y));
       if (good) { out.good.push(y); out.ug += rem[y]; } else { out.norm.push(y); out.un += rem[y]; }
     }
     c[y]--;
