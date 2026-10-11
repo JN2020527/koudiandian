@@ -543,6 +543,12 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .orow.open .okt{display:flex}
 .okl{flex:none;font-size:10px;font-weight:900;color:#7dffaa;line-height:24px}
 .okt.n .okl{color:#a9b4ae}.okt.n .ukc{opacity:.85}.okt.n .ukc.hi{opacity:1}
+.okt.rt{flex-wrap:wrap;align-items:center;gap:2px 6px}.okt.rt .okl{line-height:18px}
+.okm{flex:none;font-size:10px;color:#ffe7a6;line-height:18px;white-space:nowrap}
+.okt.rt .ukts{flex-basis:100%}
+.okt.rl .okl,.hrt.rl .okl{color:#ffd769}
+.hgood.rts{flex-direction:column;align-items:stretch;gap:3px}
+.hrt{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px}.hrt .okl{font-size:12px;font-weight:900;color:#7dffaa}.hrt .okm{font-size:11.5px}
 .ukcmp{margin:6px 0 2px;display:flex;flex-direction:column;gap:4px}
 .ukl{display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;font-size:12px;line-height:1.4}
 .ukl .ukh{flex-basis:100%}.ukl b{color:var(--gold)}
@@ -683,7 +689,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
  .dq,.rv{max-width:1240px;max-height:820px;margin:0 auto}
  #train .tile.tk{--w:40px;--h:55px}#train .tile.tm{--w:32px;--h:44px}
  .dq .prompt{font-size:22px}.ex,.vm{font-size:15px}.orow{font-size:13px}.prow .pl{width:66px;font-size:14px}
- #train .tile.tu{--w:20px;--h:27px}.ukc b{font-size:13px}.ukl{font-size:14px}.ukl.sum{font-size:13px}.okl{font-size:12px;line-height:29px}.otag{font-size:12px;line-height:18px}
+ #train .tile.tu{--w:20px;--h:27px}.ukc b{font-size:13px}.ukl{font-size:14px}.ukl.sum{font-size:13px}.okl{font-size:12px;line-height:29px}.okt.rt .okl{line-height:20px}.okm{font-size:12px;line-height:20px}.otag{font-size:12px;line-height:18px}
 }
 @media (max-height:500px){
  #train{--sidew:292px;--thw:min(46px,calc((100vw - 80px)/15.5),calc(10.6 * var(--vh1,1vh)));--tpw:17px}
@@ -1495,6 +1501,103 @@ function discardTable(st, p, withEngine) {
   const minS = Math.min(...rows.map(r => r.s));
   return { rows, eng, rem, minS };
 }
+/* ---------------- 龙 routes (display only; ranking / grading / AI unchanged) ----------------
+   For a 13-tile hand (after the discard) list the realistic 龙 routes next to the normal route, each with
+   its own steps-to-听牌 and the 好进张 that advance it. Returns null when no 龙 route is realistic. */
+/* 七对 shanten counting the 7-different-kinds requirement (works on a suit-restricted hand too) */
+function qiduiS(c) {
+  let P = 0, S = 0; for (const x of c) { P += x >> 1; if (x & 1) S++; }
+  const need = Math.max(0, 7 - P); return Math.min(need, S) + 2 * Math.max(0, need - S) - 1;
+}
+function restrictTo(c, suit) { const r = new Array(34).fill(0); for (let k = 0; k < 9; k++) r[suit * 9 + k] = c[suit * 9 + k]; return r; }
+/* 一条龙: best over suits with ≤ 3 missing kinds of 1–9 */
+function yitiaoS(c, nm) {
+  if (nm > 1) return 99;
+  let best = 99;
+  for (let su = 0; su < 3; su++) {
+    const b = su * 9; let miss = 0; for (let k = 0; k < 9; k++) if (!c[b + k]) miss++;
+    if (miss > 3) continue;
+    const r = c.slice(); for (let k = 0; k < 9; k++) if (r[b + k]) r[b + k]--;
+    best = Math.min(best, G.shantenNormal(r, nm + 3) + miss);
+  }
+  return best;
+}
+const stepStr = s => s <= 0 ? '已听牌' : s === 1 ? '一向听' : `还差 ${s} 步`;
+const ROUTE_LABEL = { normal: '走普通', qidui: '走七对', qing: '走青龙', qingqd: '走青龙+七对', yitiao: '走一条龙' };
+/* tiles y (still unseen) whose draw lowers f() */
+function lowering(c, rem, f, only) {
+  const f0 = f(c), out = [];
+  for (let y = 0; y < 34; y++) {
+    if (c[y] >= 4 || !(rem[y] > 0) || (only && !only(y))) continue;
+    c[y]++; if (f(c) < f0) out.push(y); c[y]--;
+  }
+  return out;
+}
+function routeInfo(c, melds, rem) {
+  melds = melds || []; const nm = melds.length;
+  const s = G.shanten(c, nm), sN = G.shantenNormal(c, nm);
+  const plan = G.longPlan(c, melds), longs = [];
+  let pairs = 0; for (const x of c) pairs += x >> 1;
+  // 七对 (any suits): no melds and 4+ pairs, or 七对 at most one step behind the normal shape
+  if (nm === 0 && (pairs >= 4 || G.shantenChiitoi(c, 0) <= sN + 1)) {
+    const sq = qiduiS(c);
+    if (sq <= 3) longs.push({ key: 'qidui', s: sq, base: G.LONG_PTS, tiles: lowering(c, rem, qiduiS) });
+  }
+  // 青龙: melds all in the main suit and at most 4 off-suit tiles
+  if (plan.off <= 4) {
+    const su = plan.suit, inSuit = y => y < 27 && ((y / 9) | 0) === su;
+    const fN = x => G.shantenNormal(restrictTo(x, su), nm), fQ = x => nm ? 99 : qiduiS(restrictTo(x, su));
+    const qn = fN(c), qq = fQ(c);
+    if (qq < qn) longs.push({ key: 'qingqd', s: qq, base: 2 * G.LONG_PTS, tiles: lowering(c, rem, fQ, inSuit), suit: su });
+    else longs.push({ key: 'qing', s: qn, base: G.LONG_PTS, alt: qq === qn ? 2 * G.LONG_PTS : 0, tiles: lowering(c, rem, fN, inSuit), suit: su });
+  }
+  // 一条龙: close (as close as the fastest route, or 一向听)
+  const yi = yitiaoS(c, nm);
+  if (yi <= Math.max(1, s)) longs.push({ key: 'yitiao', s: yi, base: G.LONG_PTS, tiles: lowering(c, rem, x => yitiaoS(x, nm)) });
+  if (!longs.length) return null;
+  longs.sort((a, b) => a.s - b.s);
+  // normal route: 好进张 on the normal shape (direct set / first pair, or 听牌 that can 报听)
+  const b0 = G.structB(c, nm), normal = { key: 'normal', s: sN, tiles: [] };
+  for (let y = 0; y < 34; y++) {
+    if (c[y] >= 4 || !(rem[y] > 0)) continue;
+    c[y]++;
+    const s1 = G.shantenNormal(c, nm);
+    if (s1 < sN && (G.structB(c, nm) > b0 || (s1 === 0 && G.canBaotingAfter(c, nm, rem, y)))) normal.tiles.push(y);
+    c[y]--;
+  }
+  let hon = false; for (let t = 27; t < 34; t++) if (c[t]) hon = true;
+  normal.maxPts = hon || melds.some(m => m.tile >= 27) ? 10 : 9;
+  longs.forEach(l => { l.label = ROUTE_LABEL[l.key]; l.n = l.tiles.reduce((a, t) => a + rem[t], 0); });
+  normal.label = ROUTE_LABEL.normal; normal.n = normal.tiles.reduce((a, t) => a + rem[t], 0);
+  return { s, normal, longs };
+}
+/* routes for discarding `tile` from a 14-tile hand */
+function routesFor(hand, melds, rem, tile) {
+  const c = G.counts(hand); if (!c[tile]) return null;
+  c[tile]--; return routeInfo(c, melds, rem);
+}
+const routeScore = r => r.key === 'normal' ? `按牌点 约 6–${r.maxPts} 分` : `底分 ${r.base}，自摸 ${r.base * 2}${r.alt ? `（凑成七对 ${r.alt}）` : ''}`;
+const ROUTE_NAME = { qidui: '七对龙', qing: '青龙', qingqd: '青龙+七对', yitiao: '一条龙' };
+/* is the discard of tile t (from 14-tile counts c14) actually chasing 龙 route l?  (the 龙 is the reason, not a side effect) */
+function routeJustified(c14, melds, t, after, l) {
+  const sN = after.normal.s;
+  if (l.key === 'qing' || l.key === 'qingqd') {
+    const off = t >= 27 || ((t / 9) | 0) !== l.suit;
+    // the 龙 must be (one of) the reasons: at least as close as the normal shape, or the hand is almost pure (engine chases it hard)
+    return off && (l.s <= sN || G.longPlan(c14, melds).off <= 3);
+  }
+  if (l.key === 'qidui') return (c14[t] & 1) === 1 && l.s < sN;
+  if (l.key === 'yitiao') return l.s <= after.s && l.s < sN;
+  return false;
+}
+/* verdict wording for a discard: '在做青龙' only when justified, otherwise a short neutral note */
+function routeNote(hand, melds, rem, t) {
+  const r = routesFor(hand, melds, rem, t); if (!r) return { doing: '', also: '' };
+  const c14 = G.counts(hand), doing = [], also = [];
+  for (const l of r.longs) (routeJustified(c14, melds, t, r, l) ? doing : also).push(l);
+  return { doing: doing.map(l => ROUTE_NAME[l.key]).join('、'),
+    also: also.length ? '也可以' + also.map(l => `${l.label}（${stepStr(l.s)}，底分 ${l.base}）`).join('、') : '' };
+}
 /* 进张 display: '进 61（好 24 · 一般 37）' */
 const ukStr = r => `进 ${r.uk}（好 ${r.ug} · 一般 ${r.un}）`;
 /* ranking used by 牌效题, the review and the hint engine: shanten first; then
@@ -1544,8 +1647,10 @@ function analyzeSelf(d) {
   const threats = G.threatsFor(st, 0);
   out.k = { tile: K.tile, s: K.s, uk: K.uk, ug: K.ug, un: K.un, danger: K.danger }; out.threats = threats;
   let v = 'good', type = null, msg = '', sev = 0;
+  const note = t => { try { return routeNote(pl.hand, pl.melds, tb.rem, t); } catch (e) { return { doing: '', also: '' }; } };
   if (K.tile === R.tile) {
-    msg = K.s === 0 ? (K.legal ? `听 ${waitsStr(K, tb.rem)}，能胡的还剩 ${K.winRem} 张` : `听牌，但听口没有 6 点以上的牌`) : `${sName(K.s)}，${ukStr(K)}，和推荐一致${K.plan ? `，在做${PLAN_STR[K.plan]}` : ''}`;
+    const nk = K.s > 0 ? note(K.tile) : null;
+    msg = K.s === 0 ? (K.legal ? `听 ${waitsStr(K, tb.rem)}，能胡的还剩 ${K.winRem} 张` : `听牌，但听口没有 6 点以上的牌`) : `${sName(K.s)}，${ukStr(K)}，和推荐一致${nk.doing ? `，在做${nk.doing}` : ''}${nk.also ? `；${nk.also}` : ''}`;
   } else if (threats.length && K.danger > R.danger && K.danger >= 3) {
     v = (K.danger >= 6 && R.danger <= 2) ? 'bad' : 'ok'; type = 'danger';
     msg = `${threats.map(q => NAMES[q]).join('、')} 已报听：${tn(K.tile)} 是 6 点以上的危险牌，打 ${tn(R.tile)} 更安全`;
@@ -1571,7 +1676,8 @@ function analyzeSelf(d) {
       sev = 6 + Math.max(0, (R.winRem - K.winRem) * 2) + (rl && !kl ? 6 : 0);
     }
   } else if (R.plan && K.s === R.s) {
-    msg = `${sName(K.s)}，${ukStr(K)}；推荐打 ${tn(R.tile)} 做${PLAN_STR[R.plan]}，胡了底分 ${G.LONG_PTS} 起`;
+    const nr = note(R.tile);
+    msg = `${sName(K.s)}，${ukStr(K)}；` + (nr.doing ? `推荐打 ${tn(R.tile)} 做${nr.doing}，胡了底分 ${G.LONG_PTS} 起` : `推荐打 ${tn(R.tile)}，${ukStr(R)}${nr.also ? `；${nr.also}` : ''}`);
     if (K.ug < R.ug * 0.7) { v = 'ok'; type = 'efficiency'; sev = 4; }
   } else if (effCmp(K, R) <= 0 || (totalFirst(K.s) ? K.uk >= R.uk - 2 && K.ug >= R.ug - 2 : K.ug >= R.ug - 1 && K.uk >= R.uk - 2)) {
     msg = effCmp(K, R) <= 0 ? `${sName(K.s)}，${ukStr(K)}，很好` : `${ukStr(K)}，和推荐（打 ${tn(R.tile)} ${ukStr(R)}）相当`;
@@ -2093,7 +2199,7 @@ function checkAnswer(q, ans) {
 /* 牌效题 saved under an older ranking (错题本) are re-graded with the current rule */
 function normQ(q) { if (q && q.type === 'xiaolv' && q.rows && q.rows.length) q.answer = effAnswer(q.rows); return q; }
 
-const api = { ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
+const api = { routeInfo, routesFor, routeNote, routeScore, stepStr, qiduiS, yitiaoS, ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
   exportText, handStats, aggregate, genQuestion, checkAnswer, safetyTier, remFromSeen, payFor, tingRows, bestTing, waitClass, simCapture, setYield, seenOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDDT = api;
@@ -2310,6 +2416,12 @@ function tileHTML(t, size, cls, attrs) {
 function ukTilesHTML(tiles, rem, hi) {
   if (!tiles || !tiles.length) return '<span class="ukts none">无</span>';
   return `<span class="ukts">${tiles.slice().sort((a, b) => a - b).map(t => `<span class="ukc${hi && hi.has(t) ? ' hi' : ''}">${tileHTML(t, 'tu')}<b>×${rem ? rem[t] : '?'}</b></span>`).join('')}</span>`;
+}
+/* 好进张 grouped by route (T.routeInfo result): one line per route = label · steps · approx score · tiles */
+function routesHTML(rt, rem, hi, cls) {
+  const T = window.KDDT;
+  return [rt.normal].concat(rt.longs).filter(l => l.tiles.length || l.key !== 'normal').map(l =>
+    `<div class="${cls || 'okt'} rt ${l.key === 'normal' ? 'rn' : 'rl'}"><span class="okl">${l.label}</span><span class="okm">${T.stepStr(l.s)} · ${T.routeScore(l)}</span>${ukTilesHTML(l.tiles, rem, hi)}</div>`).join('');
 }
 function backHTML(size) { return `<div class="tile ${size} facedown"></div>`; }
 function meldHTML(m, size, mine) {
@@ -2554,16 +2666,21 @@ function computeHint(rem) {
     }
     const tp = G.pts(b.tile);
     let short, reason;
-    if (b.plan === 'qing') { short = '做青龙'; reason = `手里几乎都是同一门，打掉杂牌做清一色（青龙），胡了底分 ${G.LONG_PTS} 起，不看胡牌点数`; }
-    else if (b.plan === 'qidui') { short = '做七对龙'; reason = `已经有 5 对以上，留对子打单张做七对（七对龙），胡了底分 ${G.LONG_PTS} 起`; }
+    const TT = window.KDDT;
+    let rn = { doing: '', also: '' }, rts = null;
+    if (TT && TT.routeNote && b.s > 0) { try { rn = TT.routeNote(me.hand, me.melds, rem, b.tile); rts = TT.routesFor(me.hand, me.melds, rem, b.tile); } catch (e) { console.error(e); } }
+    // '做青龙/七对龙' only when the discard really chases that 龙 (otherwise neutral reason + a short 龙 note)
+    if (b.plan === 'qing' && /青龙/.test(rn.doing)) { short = '做青龙'; reason = `手里几乎都是同一门，打掉杂牌做清一色（青龙），胡了底分 ${G.LONG_PTS} 起，不看胡牌点数`; }
+    else if (b.plan === 'qidui' && /七对/.test(rn.doing)) { short = '做七对龙'; reason = `已经有 5 对以上，留对子打单张做七对（七对龙），胡了底分 ${G.LONG_PTS} 起`; }
     else if (b.isolated && b.tile >= 27) { short = '孤张字牌'; reason = '孤张字牌很难成型'; }
     else if (b.isolated) { short = '孤张'; reason = '孤张，周围没有能连的牌'; }
     else if (tp <= 2) { short = '点数太小'; reason = '1–2 点的牌做听口不能胡，价值低'; }
     else if (b.s >= 2) { short = '进张最多'; reason = `离听牌还差 ${b.s} 步，先求牌宽：打它留下的总进张最多`; }
     else { short = '好进张最多'; reason = '打它留下的好进张（直接成组/补将/听牌）最多'; }
     const tail = b.s === 0 ? (b.legal ? `打后听 ${ws(b.waits)}` : '打后虽然听牌，但听口没有 6 点以上的牌，不能报听，继续改良') : `打后 ${b.s} 向听，进 ${b.ukeire} 张（<b class="ukg">好 ${b.ug}</b> · <span class="ukn">一般 ${b.un}</span>）`;
-    const gl = b.s > 0 && b.good && b.good.length ? `<div class="hgood"><span class="hgl">好进张 <b class="ukg">${b.ug}</b> 张：</span>${ukTilesHTML(b.good, rem)}</div>` : '';
-    return { rec: b.tile, short: `打 <b>${name}</b> · ${short}`, text: `${reason}；${tail}。${gl}` };
+    const gl = b.s > 0 && rts ? `<div class="hgood rts">${routesHTML(rts, rem, null, 'hrt')}</div>`
+      : b.s > 0 && b.good && b.good.length ? `<div class="hgood"><span class="hgl">好进张 <b class="ukg">${b.ug}</b> 张：</span>${ukTilesHTML(b.good, rem)}</div>` : '';
+    return { rec: b.tile, short: `打 <b>${name}</b> · ${short}`, text: `${reason}；${tail}${rn.also && !rn.doing ? '。' + rn.also : ''}。${gl}` };
   }
   if (pending && pending.kind === 'claim') {
     const d = G.AI.claim(st, 0, pending.t, pending.o);
@@ -2881,7 +2998,7 @@ async function startRound() {
   showResult(r, rec, an);
 }
 window.__kdd = { get st() { return st; }, get pending() { return pending; }, Voice, sayTile, render, startRound, tileHTML, backHTML };
-window.KDDUI = { tileHTML, ukTilesHTML, backHTML, meldHTML, Snd, showModal, hideModal, startRound, render,
+window.KDDUI = { tileHTML, ukTilesHTML, routesHTML, backHTML, meldHTML, Snd, showModal, hideModal, startRound, render,
   get busy() { return busy; }, get st() { return st; }, get lastRec() { return lastRec; } };
 if (!window.KDDT || /[?&](seed=|play)/.test(location.search)) startRound();
 })();
@@ -3086,9 +3203,12 @@ function ukRow(r, rem, o) {
   const has = r.s > 0 && ((r.goodTiles && r.goodTiles.length) || wide), open = has && o.open;
   return `<div class="orow ukr ${o.cls || ''} ${open ? 'open' : ''} ${has ? '' : 'nox'}" ${has ? 'data-act="ukx"' : ''}>${tl(r.tile, 'tp')}${o.tag ? `<span class="otag">${o.tag}</span>` : ''}` +
     `<span class="o1">${o.o1}</span><span class="o2">${o.o2}</span>${has ? '<span class="ukar" aria-hidden="true">›</span>' : ''}` +
-    (has ? `<div class="okt"><span class="okl">好进张</span>${ukChips(r.goodTiles, rem, o.hi)}</div>` : '') +
+    (has ? (o.routes ? routesHTML(o.routes, rem, o.hi) : `<div class="okt"><span class="okl">好进张</span>${ukChips(r.goodTiles, rem, o.hi)}</div>`) : '') +
     (has && wide ? `<div class="okt n"><span class="okl">一般</span>${ukChips(r.normTiles, rem, o.hi)}</div>` : '') + `</div>`;
 }
+/* 好进张 split by route when a 龙 is realistic: 走普通 / 走七对 / 走青龙 …, each with its steps and approximate score */
+function routesHTML(rt, rem, hi) { return U.routesHTML(rt, rem, hi, 'okt'); }
+const routesOf = (hand, melds, rem, t) => { try { return T.routesFor(hand, melds || [], rem, t); } catch (e) { console.error(e); return null; } };
 /* concrete comparison: which good tiles only the better discard keeps (and vice versa) */
 function ukCmpHTML(a, b, rem, mineLabel) {
   if (!a || !b || a.s !== b.s || a.s <= 0 || !a.goodTiles || !b.goodTiles) return '';
@@ -3147,11 +3267,11 @@ function renderDrill() {
         (cmpB ? ukCmpHTML(cmpA, cmpB, rem, s.res.correct ? '次选' : '你打') : '') +
         `<div class="otab uk">${top.map(r => {
           const isBest = q.answer.includes(r.tile), isMine = r.tile === s.ans && !s.res.correct, back = r.s > q.minS;
-          return ukRow(r, rem, { cls: isBest ? 'best' : isMine ? 'mine' : '', open: isBest ? r.tile === q.answer[0] || r.tile === s.ans : isMine,
+          return ukRow(r, rem, { routes: back ? null : routesOf(q.hand, q.melds, rem, r.tile), cls: isBest ? 'best' : isMine ? 'mine' : '', open: isBest ? r.tile === q.answer[0] || r.tile === s.ans : isMine,
             tag: isBest ? '最佳' : isMine ? '你打' : '', hi: isBest && r.tile === best.tile ? onlyBest : null,
             o1: back ? '退向听' : T.totalFirst(r.s) ? `<b>进 ${r.uk}</b>` : `<b class="ukg">好 ${r.ug}</b>`, o2: back ? '' : T.totalFirst(r.s) ? `<b class="ukg">好 ${r.ug}</b> <span class="ukn">· 一般 ${r.un}</span>` : `<span class="ukn">一般 ${r.un}</span>` });
         }).join('')}</div>` +
-        `<div class="ex small">点任一行展开/收起它的好进张。<b class="ukg">好进张</b>：摸到直接成一组顺子/刻子、补出缺的将，或直接听牌（七对路线上凑出新对子也算）。×N = 场上还剩几张。<span class="ukn">一般进张</span>：其余能减少向听的牌（如孤张变搭子）。</div>` + nextBtn();
+        `<div class="ex small">点任一行展开/收起它的好进张。<b class="ukg">好进张</b>：摸到直接成一组顺子/刻子、补出缺的将，或直接听牌（七对路线上凑出新对子也算）。能做龙时按路线分开列：走普通胡了按牌点算，走龙底分 20 起。×N = 场上还剩几张。<span class="ukn">一般进张</span>：其余能减少向听的牌（如孤张变搭子）。</div>` + nextBtn();
     }
   } else if (q.type === 'tingpai') {
     prompt = `这手牌<b>听哪几张</b>？（可多选）<b>能不能报听</b>？`;
@@ -3395,7 +3515,7 @@ function renderReview() {
       const o1 = r.s === 0 ? (r.legal ? '可报听' : '听(<6点)') : T.sName(r.s);
       const dg = r.danger >= 6 ? ' <em class="dg">危险</em>' : '';
       if (r.s === 0 || !rem || !r.goodTiles) return `<div class="orow ${isRec ? 'best' : isMine ? 'mine' : ''}">${tl(r.tile, 'tp')}<span class="o1">${o1}</span><span class="o2">${r.s === 0 ? `听 ${r.waits.map(tn).join(' ')} · 能胡 ${r.winRem}` : `进 ${r.uk}（<b class="ukg">好 ${r.ug}</b> · <span class="ukn">一般 ${r.un}</span>）`}${dg}</span></div>`;
-      return ukRow(r, rem, { cls: isRec ? 'best' : isMine ? 'mine' : '', open: isRec || isMine, tag: isRec ? '推荐' : isMine ? '你打' : '', hi: isRec ? onlyRec : null,
+      return ukRow(r, rem, { routes: routesOf(me.hand, me.melds, rem, r.tile), cls: isRec ? 'best' : isMine ? 'mine' : '', open: isRec || isMine, tag: isRec ? '推荐' : isMine ? '你打' : '', hi: isRec ? onlyRec : null,
         o1, o2: (T.totalFirst(r.s) ? `<b>进 ${r.uk}</b> <span class="ukn">· 好 ${r.ug} · 一般 ${r.un}</span>` : `<b class="ukg">好 ${r.ug}</b> <span class="ukn">· 一般 ${r.un}</span>`) + dg });
     }).join('')}</div>`;
   }
