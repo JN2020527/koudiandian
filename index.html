@@ -992,8 +992,10 @@ function shanten(c, nm) { return Math.min(shantenNormal(c, nm), shantenChiitoi(c
 
 /* ---------- 进张 tiers (evaluation only; rules unaffected) ----------
    For a 13-tile hand H with shanten s >= 1, a tile y is 进张 when shanten(H+y) < s.
-   It is 好进张 when, in addition, one of:
-     (a) 听牌可报听: shanten(H+y) == 0 and some discard leaves a 听口 with a 6+ point tile (can 报听);
+   Draws that reach 听牌 (s == 1, shanten(H+y) == 0) are judged only by 报听 (v20):
+     (a) 听牌可报听: some discard leaves a 听口 with a live 6+ point tile -> 好进张; otherwise the 听 can never win
+         (effShanten keeps it at 一向听), so y is NOT a 进张 at all (consistent with fakeTingUkeire).
+   For s >= 2, y is 好进张 when one of:
      (b) 成组: structB(H+y) > structB(H), where structB = max over decompositions of
          2 × (complete 顺子/刻子, capped at 4 − melds) + (1 if a 将 pair also fits),
          i.e. y completes a 顺子/刻子, or gives the hand its first pair;
@@ -1065,9 +1067,15 @@ function ukeireTiers(c, nm, rem, s) {
     c[y]++;
     const s1 = shanten(c, nm);
     if (s1 < s) {
-      const q1 = shantenChiitoi(c, nm);
-      const good = structB(c, nm) > b0 || (q1 === s1 && q1 < q0) || (s1 === 0 && canBaotingAfter(c, nm, rem, y));
-      if (good) { out.good.push(y); out.ug += rem[y]; } else { out.norm.push(y); out.un += rem[y]; }
+      if (s1 === 0) {
+        // reaching 听牌 (from 一向听): only a 听 that can 报听 (live 6+ point wait) is progress. A 听 on 1–5 point /
+        // dead waits only is ranked as 一向听 (effShanten / fakeTingUkeire), so such a draw is no 进张 at all.
+        if (canBaotingAfter(c, nm, rem, y)) { out.good.push(y); out.ug += rem[y]; }
+      } else {
+        const q1 = shantenChiitoi(c, nm);
+        const good = structB(c, nm) > b0 || (q1 === s1 && q1 < q0);
+        if (good) { out.good.push(y); out.ug += rem[y]; } else { out.norm.push(y); out.un += rem[y]; }
+      }
     }
     c[y]--;
   }
@@ -1608,6 +1616,8 @@ function longRoutes(c, melds, rem) {
     const fk = fakeTingUkeire(c, nm, rem).good;
     for (const l of longs) if (l.s <= 0) { l.s = 1; l.tiles = l.suit != null && l.key !== 'yitiao' ? fk.filter(y => y < 27 && ((y / 9) | 0) === l.suit) : fk.slice(); }
   }
+  // v20: a route one step from 听 only advances on draws that reach a 听 that can 报听 (live 6+ point wait), same as ukeireTiers
+  for (const l of longs) if (l.s === 1) l.tiles = l.tiles.filter(y => { c[y]++; const ok = canBaotingAfter(c, nm, rem, y); c[y]--; return ok; });
   longs.sort((a, b) => a.s - b.s);
   return { s, sN, fakeN, longs };
 }
@@ -1913,7 +1923,7 @@ function routeInfo(c, melds, rem) {
     if (c[y] >= 4 || !(rem[y] > 0)) continue;
     c[y]++;
     const s1 = G.shantenNormal(c, nm);
-    if (s1 < sN && (G.structB(c, nm) > b0 || (s1 === 0 && G.canBaotingAfter(c, nm, rem, y)))) normal.tiles.push(y);
+    if (s1 < sN && (s1 === 0 ? G.canBaotingAfter(c, nm, rem, y) : G.structB(c, nm) > b0)) normal.tiles.push(y); // v20: reaching 听 counts only if it can 报听
     c[y]--;
   }
   let hon = false; for (let t = 27; t < 34; t++) if (c[t]) hon = true;
@@ -2298,7 +2308,7 @@ function exportText(rec, an) {
   L.push('规则: 136张无花; 可碰杠不可吃; 必须报听才能胡, 报听后手牌锁定; 报听需听口含6点以上; 牌点=数字, 字牌10; 1-2点不能胡, 3-5点只能自摸, 6点以上可自摸可点炮; 龙: 青龙(清一色,含副露全是一门数牌)/七对龙(七对,只能门清,四张算两对)/一条龙(门清顺子123456789同一门) 每种底分20可叠加(七对龙与一条龙互斥), 有龙时底分代替胡牌点数, 但能否胡仍看胡的那张牌的点数; 得分=底分(无龙时为胡牌点数)×2(自摸)×2^暗杠数; 自摸三家各付; 未报听者点炮包胡(付3份), 已报听者点炮三家各付; 无耗子无庄分');
   L.push('座位: ' + [0, 1, 2, 3].map(i => `${NAMES[i]}(${WINDS[(i - rec.dealer + 4) % 4]}${i === rec.dealer ? '/庄' : ''})`).join(' ') + ' | 开局分: ' + [0, 1, 2, 3].map(i => `${NAMES[i]} ${rec.scores0[i]}`).join(' '));
   L.push(`Kevin配牌: [${groupStr(rec.hands0[0])}]`);
-  L.push('--- 过程（Kevin 每手附引擎推荐与评价；[进 N（好 a · 一般 b）] = 打后进张: 好进张=直接成组/补将/可报听的听牌, 一般=其余; 推荐先比向听; 差2步以上先比总进张再比好进张, 一向听先比好进张再比总进张; 向听一样且进张差10%以内时优先保留龙）---');
+  L.push('--- 过程（Kevin 每手附引擎推荐与评价；[进 N（好 a · 一般 b）] = 打后进张: 好进张=直接成组/补将/可报听的听牌, 一般=其余; 一向听时只听 1–5 点(报不了听)的不算进张; 推荐先比向听; 差2步以上先比总进张再比好进张, 一向听先比好进张再比总进张; 向听一样且进张差10%以内时优先保留龙）---');
   const pend = [null, null, null, null]; let dec = null;
   for (const e of rec.events) {
     const xs = `第${e.xun || 1}巡`;
@@ -2431,7 +2441,7 @@ async function genXiaolv(rng) {
     if (ans.length > 2 || top.uk < 8 || top.ug < 4) return null;
     if (!others.some(r => r.s === tb.minS && (r.ug <= top.ug - 3 || r.uk <= top.uk - 4))) return null;
     return { id: mkId('xiaolv', rng), type: 'xiaolv', hand: sorted(me.hand), drawn: me.drawn, melds: me.melds.map(m => ({ type: m.type, tile: m.tile })), seen: seenOf(s),
-      minS: tb.minS, v18: 1, rows: tb.rows.map(r => ({ tile: r.tile, s: r.s, fake: !!r.fake, waits: r.fake ? r.waits : undefined, legal: r.fake ? r.legal : undefined, uk: r.uk, ug: r.ug, un: r.un, ukTiles: r.ukTiles, goodTiles: r.goodTiles, normTiles: r.normTiles, lv: r.lv || undefined })), answer: ans };
+      minS: tb.minS, v18: 1, v20: 1, rows: tb.rows.map(r => ({ tile: r.tile, s: r.s, fake: !!r.fake, waits: r.fake ? r.waits : undefined, legal: r.fake ? r.legal : undefined, uk: r.uk, ug: r.ug, un: r.un, ukTiles: r.ukTiles, goodTiles: r.goodTiles, normTiles: r.normTiles, lv: r.lv || undefined })), answer: ans };
   });
 }
 async function genTingpai(rng) {
@@ -2673,9 +2683,33 @@ function checkAnswer(q, ans) {
   if (q.type === 'xiaolv' || q.type === 'fangshou') normQ(q);
   return { correct: q.answer.includes(ans) };
 }
+/* 牌效题 rows (same numbers as discardTable without the engine) from a question's own hand / melds / remaining tiles */
+function xiaolvRows(hand, melds, rem) {
+  const c = G.counts(hand), nm = melds.length, rows = [];
+  for (let t = 0; t < 34; t++) if (c[t]) {
+    c[t]--;
+    const s = G.shanten(c, nm), r = { tile: t, s, fake: false, uk: 0, ug: 0, un: 0, ukTiles: [], goodTiles: [], normTiles: [] };
+    if (s === 0) {
+      const w = G.waitsOf(c, nm);
+      if (G.usableTing(w, rem)) { r.uk = w.reduce((a, x) => a + rem[x], 0); r.ukTiles = w.slice(); }
+      else { const tr = G.fakeTingUkeire(c, nm, rem); Object.assign(r, { s: 1, fake: true, waits: w, legal: G.canTingWith(w), uk: tr.uk, ug: tr.ug, goodTiles: tr.good, ukTiles: tr.good.slice() }); }
+    } else {
+      const tr = G.ukeireTiers(c, nm, rem, s);
+      Object.assign(r, { uk: tr.uk, ug: tr.ug, un: tr.un, goodTiles: tr.good, normTiles: tr.norm, ukTiles: tr.good.concat(tr.norm).sort((a, b) => a - b) });
+    }
+    c[t]++; rows.push(r);
+  }
+  return rows;
+}
 /* 牌效题 saved under an older ranking (错题本) are re-graded with the current rule */
 function normQ(q) {
   if (q && q.type === 'xiaolv' && q.rows && q.rows.length) {
+    // saved before v20: 一向听 draws that only reach a 听 that can't 报听 counted as 好进张 -> recompute the rows
+    if (!q.v20 && q.hand && q.seen) {
+      try { const rem = remFromSeen(q.hand, q.seen), rows = xiaolvRows(q.hand, q.melds || [], rem), mn = Math.min(...rows.map(r => r.s));
+        addLv(rows, q.hand, q.melds || [], rem, r => r.s === mn); q.rows = rows; q.minS = mn; q.v18 = 1; } catch (e) { /* keep old rows */ }
+      q.v20 = 1;
+    }
     // saved before v18: add the 龙 value of each row (near-tie 龙 rule) from the question's own hand / seen tiles
     if (!q.v18 && q.hand && q.seen) { try { const mn = Math.min(...q.rows.map(r => r.s)); addLv(q.rows, q.hand, q.melds, remFromSeen(q.hand, q.seen), r => r.s === mn); } catch (e) { /* keep old rows */ } q.v18 = 1; }
     q.answer = effAnswer(q.rows);
@@ -2687,7 +2721,7 @@ function normQ(q) {
   return q;
 }
 
-const api = { pctStr, offGain, defenseCmp, defenseSolo, defVerdict, evRowsFromSeen, threatViewsFromSeen, effRank, tieKey, tieWhy, addLv, lvStr, fakeTingStr, rowSName, routeInfo, routesFor, routeNote, routeScore, stepStr, qiduiS, yitiaoS, ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
+const api = { xiaolvRows, pctStr, offGain, defenseCmp, defenseSolo, defVerdict, evRowsFromSeen, threatViewsFromSeen, effRank, tieKey, tieWhy, addLv, lvStr, fakeTingStr, rowSName, routeInfo, routesFor, routeNote, routeScore, stepStr, qiduiS, yitiaoS, ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
   exportText, handStats, aggregate, genQuestion, checkAnswer, safetyTier, remFromSeen, payFor, tingRows, bestTing, waitClass, simCapture, setYield, seenOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDDT = api;
@@ -3255,7 +3289,7 @@ function computeHint(rem) {
     else if (b.isolated) { short = '孤张'; reason = '孤张，周围没有能连的牌'; }
     else if (tp <= 2) { short = '点数太小'; reason = '1–2 点的牌做听口不能胡，价值低'; }
     else if (b.s >= 2) { short = '进张最多'; reason = `离听牌还差 ${b.s} 步，先求牌宽：打它留下的总进张最多`; }
-    else { short = '好进张最多'; reason = '打它留下的好进张（直接成组/补将/听牌）最多'; }
+    else { short = '好进张最多'; reason = '打它留下的好进张（直接成组/补将/能报听的听牌）最多'; }
     const tail = b.s === 0 ? `打后听 ${ws(b.waits)}` : b.fake ? `打后${TT && TT.fakeTingStr ? TT.fakeTingStr(b) : '听口不到 6 点，不能报听'}，算一向听，进 ${b.ukeire} 张（<b class="ukg">好 ${b.ug}</b>，都是摸到后能变成可报听的听牌）` : `打后 ${b.s} 向听，进 ${b.ukeire} 张（<b class="ukg">好 ${b.ug}</b> · <span class="ukn">一般 ${b.un}</span>）`;
     const gl = b.s > 0 && rts ? `<div class="hgood rts">${routesHTML(rts, rem, null, 'hrt')}</div>`
       : b.s > 0 && b.good && b.good.length ? `<div class="hgood"><span class="hgl">好进张 <b class="ukg">${b.ug}</b> 张：</span>${ukTilesHTML(b.good, rem)}</div>` : '';
@@ -3564,7 +3598,7 @@ function showRules() {
   <h3>报听与点数</h3><ul><li><b>必须报听才能胡</b>；报听后手牌锁定，只能打出摸到的牌。</li><li>报听时打的那张要<b>扣着打</b>（牌背朝上）：别人看不到是什么牌，也<b>不能碰、杠、胡</b>这张；本局结束后才翻开。你自己扣的那张只有你看得到（半透明、虚线框）。</li><li>数字牌按面值算点，字牌 10 点；听口里要有 6 点以上的牌才能报听。</li><li>1–2 点不能胡；3–5 点只能自摸；6 点以上自摸、点炮都能胡。</li></ul>
   <h3>算分</h3><ul><li>得分 = 底分（没有龙时 = 胡的那张牌的点数；有龙时 = 每种龙 20）；自摸 ×2；每个暗杠再 ×2。</li><li>自摸：三家各付一份。点炮：没报听的人点炮 → 一个人包三家；已报听的人点炮 → 三家各付一份。</li><li>不带耗子、不带庄分；牌墙摸完没人胡算流局，庄家没胡就轮庄。</li></ul>
   <h3>龙（加分牌型）</h3><ul><li><b>青龙</b>：清一色，整手牌连副露都是同一门数字牌，没有字牌，什么牌型都行。</li><li><b>七对龙</b>：七对胡牌，只能门清；四张一样的算两对。</li><li><b>一条龙</b>：普通牌型里有同一门的 123、456、789 三组顺子（门清，不能吃）。</li><li>每种龙底分 <b>20</b>，可以叠加：青龙 + 七对龙 = 40，青龙 + 一条龙 = 40（七对龙和一条龙不会同时出现）。有龙时<b>底分代替胡牌那张的点数</b>，再算自摸 ×2、暗杠 ×2。</li><li>注意：<b>能不能胡仍然看胡的那张牌</b>——要报听、听口要有 6 点以上才能报听；胡 1–2 点的牌不能胡，3–5 点只能自摸，6 点以上才能点炮胡，有龙也一样。</li><li>例：青龙 20 + 七对龙 20 = 40 × 自摸 2 = 80 分，三家各付 80。</li></ul>
-  <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数（离听牌越近越好）。离听牌还差 2 步以上时，先比<b>总进张</b>，牌越宽越好，总进张一样再比好进张；只差 1 步（一向听）时，先比<b class="ukg">好进张</b>，好进张一样再比总进张。两种打法向听一样、进张只差 <b>10% 以内</b>时，优先选<b>能保留龙</b>（一条龙、七对龙、青龙）的打法：龙底分越高越好，一样再看离龙更近的。都一样时才看孤张字牌、点数等小细节。</li><li><b>有人报听时</b>：手牌上的小数字是这张牌的<b>点炮概率</b>（1–5 点的牌不能点炮，是 0%；他报听后自己打过、或别人打过他没胡的牌也是 0%）。概率按他的副露、弃牌和场上见过的牌估算，标“约”。推荐比较期望得分：进攻多出的胡牌机会 × 胡牌得分，减去点炮概率 × 要赔的分（没报听点炮要包 3 家）。</li></ul>
+  <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。摸到后只能听 1–5 点（报不了听）的牌不算进张。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌（要能报听：听口里有 6 点以上、场上还有的牌）；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数（离听牌越近越好）。离听牌还差 2 步以上时，先比<b>总进张</b>，牌越宽越好，总进张一样再比好进张；只差 1 步（一向听）时，先比<b class="ukg">好进张</b>，好进张一样再比总进张。两种打法向听一样、进张只差 <b>10% 以内</b>时，优先选<b>能保留龙</b>（一条龙、七对龙、青龙）的打法：龙底分越高越好，一样再看离龙更近的。都一样时才看孤张字牌、点数等小细节。</li><li><b>有人报听时</b>：手牌上的小数字是这张牌的<b>点炮概率</b>（1–5 点的牌不能点炮，是 0%；他报听后自己打过、或别人打过他没胡的牌也是 0%）。概率按他的副露、弃牌和场上见过的牌估算，标“约”。推荐比较期望得分：进攻多出的胡牌机会 × 胡牌得分，减去点炮概率 × 要赔的分（没报听点炮要包 3 家）。</li></ul>
   <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>右上角的对话气泡按钮是「语音报牌」：点一下开 / 关，开着时会念出每张打出的牌，以及碰、杠、听、胡、自摸；和音效按钮分开控制。<b>长按</b>（电脑上点<b>右键</b>）这个按钮可以<b>选声音</b>和语速，大厅右上角的「语音」也能进；默认自动挑这台设备上最自然的中文声音。<button class="lnk" id="rulesVoice">选声音 ›</button></li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li><li>电脑：鼠标点选、再点打出；键盘 <b>← →</b> 选牌，<b>Enter</b> 或 <b>↑</b> 打出，<b>空格</b> 过，<b>H</b> 胡 · <b>P</b> 碰 · <b>G</b> 杠 · <b>T</b> 听，<b>Esc</b> 取消，<b>F</b> 全屏。</li></ul></div>
   <div class="mfoot"><button class="gbtn" id="closeRules2">知道了</button></div>`);
   $('closeRules').onclick = hideModal; $('closeRules2').onclick = hideModal; $('rulesVoice').onclick = () => showVoicePicker(showRules);
@@ -3924,7 +3958,7 @@ function renderDrill() {
             tag: isBest ? '最佳' : isMine ? '你打' : '', hi: isBest && r.tile === best.tile ? onlyBest : null,
             o1: back ? '退向听' : T.totalFirst(r.s) ? `<b>进 ${r.uk}</b>` : `<b class="ukg">好 ${r.ug}</b>`, o2: back ? '' : r.fake ? `<span class="fkt">${fakeShort(r)}</span>` : T.totalFirst(r.s) ? `<b class="ukg">好 ${r.ug}</b> <span class="ukn">· 一般 ${r.un}</span>` : `<span class="ukn">一般 ${r.un}</span>` });
         }).join('')}</div>` +
-        `<div class="ex small">点任一行展开/收起它的好进张。<b class="ukg">好进张</b>：摸到直接成一组顺子/刻子、补出缺的将，或直接听牌（七对路线上凑出新对子也算）。能做龙时按路线分开列：走普通胡了按牌点算，走龙底分 20 起。×N = 场上还剩几张。<span class="ukn">一般进张</span>：其余能减少向听的牌（如孤张变搭子）。</div>` + nextBtn();
+        `<div class="ex small">点任一行展开/收起它的好进张。<b class="ukg">好进张</b>：摸到直接成一组顺子/刻子、补出缺的将，或直接听成能报听的牌（七对路线上凑出新对子也算）。一向听时只有能报听的听牌才算进张，只能听 1–5 点的不算。能做龙时按路线分开列：走普通胡了按牌点算，走龙底分 20 起。×N = 场上还剩几张。<span class="ukn">一般进张</span>：其余能减少向听的牌（如孤张变搭子）。</div>` + nextBtn();
     }
   } else if (q.type === 'tingpai') {
     prompt = `这手牌<b>听哪几张</b>？（可多选）<b>能不能报听</b>？`;
