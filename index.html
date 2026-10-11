@@ -596,6 +596,7 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 .hgood{display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;margin-top:4px;padding-top:4px;border-top:1px dashed rgba(255,215,105,.3)}
 .hgood .hgl{font-size:12px}
 .orow .dg{font-style:normal;color:#fff;background:#b33a32;border-radius:4px;padding:0 4px;font-size:10px}
+.orow .lx,.ukr .lx,em.lx{font-style:normal;color:#fff;background:#8a5a12;border-radius:4px;padding:0 4px;font-size:10px;white-space:nowrap}
 .pk{display:flex;flex-direction:column;gap:5px}
 .pkr{display:flex;gap:4px}
 .pkc{position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;border-radius:6px;padding:2px;transition:transform .1s}
@@ -1376,6 +1377,92 @@ function longPlan(c, melds) {
   let pairs = 0; for (const x of c) pairs += x >> 1;
   return { suit, off: meldOff ? 99 : off, pairs: nm ? 0 : pairs };
 }
+/* ---------- 龙 routes (shared: ranking near-tie rule, review / hint route display) ----------
+   For a 13-tile hand list the realistic 龙 routes, each with its steps-to-听牌 and the tiles that advance it. */
+/* 七对 shanten counting the 7-different-kinds requirement (works on a suit-restricted hand too) */
+function qiduiS(c) {
+  let P = 0, S = 0; for (const x of c) { P += x >> 1; if (x & 1) S++; }
+  const need = Math.max(0, 7 - P); return Math.min(need, S) + 2 * Math.max(0, need - S) - 1;
+}
+function restrictTo(c, suit) { const r = new Array(34).fill(0); for (let k = 0; k < 9; k++) r[suit * 9 + k] = c[suit * 9 + k]; return r; }
+/* 一条龙: best over suits with ≤ 3 missing kinds of 1–9 -> { s, suit, miss:[missing kinds] } */
+function yitiaoInfo(c, nm) {
+  let best = { s: 99, suit: -1, miss: [] };
+  if (nm > 1) return best;
+  for (let su = 0; su < 3; su++) {
+    const b = su * 9, miss = []; for (let k = 0; k < 9; k++) if (!c[b + k]) miss.push(b + k);
+    if (miss.length > 3) continue;
+    const r = c.slice(); for (let k = 0; k < 9; k++) if (r[b + k]) r[b + k]--;
+    const s = shantenNormal(r, nm + 3) + miss.length;
+    if (s < best.s) best = { s, suit: su, miss };
+  }
+  return best;
+}
+function yitiaoS(c, nm) { return yitiaoInfo(c, nm).s; }
+/* tiles y (still unseen) whose draw lowers f() */
+function lowering(c, rem, f, only) {
+  const f0 = f(c), out = [];
+  for (let y = 0; y < 34; y++) {
+    if (c[y] >= 4 || !(rem[y] > 0) || (only && !only(y))) continue;
+    c[y]++; if (f(c) < f0) out.push(y); c[y]--;
+  }
+  return out;
+}
+/* { s (effective shanten), sN (normal shape; an unusable 听 = 1), fakeN, longs:[{ key, s, base, tiles, suit?, miss? }] } */
+function longRoutes(c, melds, rem) {
+  melds = melds || []; const nm = melds.length;
+  const s = effShanten(c, nm, rem);
+  let sN = shantenNormal(c, nm), fakeN = false;
+  if (sN === 0) { // normal-shape 听牌 without a live 6+ point wait can't win: treat the normal route as 一向听
+    const wN = []; for (let w = 0; w < 34; w++) if (c[w] < 4) { c[w]++; if (isWinNormal(c)) wN.push(w); c[w]--; }
+    if (!usableTing(wN, rem)) { sN = 1; fakeN = true; }
+  }
+  const plan = longPlan(c, melds), longs = [];
+  let pairs = 0; for (const x of c) pairs += x >> 1;
+  // 七对 (any suits): no melds and 4+ pairs, or 七对 at most one step behind the normal shape
+  if (nm === 0 && (pairs >= 4 || shantenChiitoi(c, 0) <= sN + 1)) {
+    const sq = qiduiS(c);
+    if (sq <= 3) longs.push({ key: 'qidui', s: sq, base: LONG_PTS, tiles: lowering(c, rem, qiduiS) });
+  }
+  // 青龙: melds all in the main suit and at most 4 off-suit tiles
+  if (plan.off <= 4) {
+    const su = plan.suit, inSuit = y => y < 27 && ((y / 9) | 0) === su;
+    const fN = x => shantenNormal(restrictTo(x, su), nm), fQ = x => nm ? 99 : qiduiS(restrictTo(x, su));
+    const qn = fN(c), qq = fQ(c);
+    if (qq < qn) longs.push({ key: 'qingqd', s: qq, base: 2 * LONG_PTS, tiles: lowering(c, rem, fQ, inSuit), suit: su });
+    else longs.push({ key: 'qing', s: qn, base: LONG_PTS, alt: qq === qn ? 2 * LONG_PTS : 0, tiles: lowering(c, rem, fN, inSuit), suit: su });
+  }
+  // 一条龙: close (as close as the fastest route, or 一向听)
+  const yi = yitiaoInfo(c, nm);
+  if (yi.s <= Math.max(1, s)) longs.push({ key: 'yitiao', s: yi.s, base: LONG_PTS, tiles: lowering(c, rem, x => yitiaoS(x, nm)), suit: yi.suit, miss: yi.miss });
+  // a 龙 route that is already 听 but has no live 6+ point wait can't 报听 either: one more step, its 进张 = tiles to a usable 听
+  if (longs.length && s >= 1 && longs.some(l => l.s <= 0)) {
+    const fk = fakeTingUkeire(c, nm, rem).good;
+    for (const l of longs) if (l.s <= 0) { l.s = 1; l.tiles = l.suit != null && l.key !== 'yitiao' ? fk.filter(y => y < 27 && ((y / 9) | 0) === l.suit) : fk.slice(); }
+  }
+  longs.sort((a, b) => a.s - b.s);
+  return { s, sN, fakeN, longs };
+}
+/* ---------- near-tie 龙 rule (shared by AI, hint, review grading and 牌效题) ----------
+   Two discards with the same (usable) shanten whose primary 进张 (2+ 向听: total 进张, 一向听: 好进张) differ by at most
+   10% of the larger are a near tie; among them prefer the one that keeps the best realistic 龙 route
+   (higher 龙 base first: 0 / 20 / 40, then fewer steps). */
+const TIE_PCT = 0.1;
+const LONG_ROUTE_NAMES = { qidui: '七对龙', qing: '青龙', qingqd: '青龙+七对龙', yitiao: '一条龙', qingyi: '青龙+一条龙' };
+const NO_LONG = { key: null, base: 0, s: 99 };
+function nearTie(a, b) { return Math.abs(a - b) <= TIE_PCT * Math.max(a, b); }
+/* best realistic 龙 route of a 13-tile hand: steps ≤ shanten + 1, it can still advance (live tiles), 一条龙's missing kinds still live */
+function longValue(c, melds, rem) {
+  const r = longRoutes(c, melds, rem); let best = NO_LONG;
+  const real = r.longs.filter(l => l.s <= r.s + 1 && l.tiles.length && (!l.miss || l.miss.every(t => rem[t] > 0)));
+  const take = x => { if (lvBetter(x, best)) best = x; };
+  for (const l of real) take({ key: l.key, base: l.base, s: l.s });
+  const q = real.find(l => l.key === 'qing' || l.key === 'qingqd'), y = real.find(l => l.key === 'yitiao');
+  if (q && y && q.suit === y.suit && q.key === 'qing') take({ key: 'qingyi', base: 2 * LONG_PTS, s: Math.max(q.s, y.s) });
+  return best;
+}
+function lvBetter(a, b) { a = a || NO_LONG; b = b || NO_LONG; return a.base > b.base || (a.base > 0 && a.base === b.base && a.s < b.s); }
+const lvName = lv => (lv && LONG_ROUTE_NAMES[lv.key]) || '';
 function evalDiscards(st, p) {
   const pl = st.players[p], c = counts(pl.hand), nm = pl.melds.length;
   const vis = visibleCounts(st, p), rem = vis.map(x => Math.max(0, 4 - x));
@@ -1436,6 +1523,20 @@ function evalDiscards(st, p) {
     x.total = -x.s * 100 + x.val + bias - x.danger * defW;
   }
   cands.sort((a, b) => b.total - a.total);
+  // near tie (same shanten, primary 进张 within 10%): prefer the discard that keeps the best 龙 route; rest of the order stays
+  const b0 = cands[0];
+  if (!threats.length && b0 && b0.s >= 1) {
+    const key = x => x.s >= 2 ? x.ukeire : x.ug;
+    const grp = cands.filter(x => x.s === b0.s && nearTie(key(x), key(b0)));
+    if (grp.length > 1) {
+      for (const x of grp) { c[x.tile]--; x.lv = longValue(c, pl.melds, rem); c[x.tile]++; x.tieGroup = true; }
+      let w = b0; for (const x of grp) if (lvBetter(x.lv, w.lv)) w = x;
+      if (w !== b0) {
+        cands.splice(cands.indexOf(w), 1); cands.unshift(w);
+        w.longTie = { over: b0.tile, overKey: key(b0), key: key(w), lv: w.lv, overLv: b0.lv };
+      }
+    }
+  }
   return cands;
 }
 function bestAfterRemoval(st, p, c, nm, rem) {
@@ -1479,7 +1580,8 @@ const AI = {
 const api = { structB, ukeireTiers, canBaotingAfter, usableTing, fakeTingUkeire, effShanten, ukeireEff, SUITS, HONORS, NUMS, SEAT_NAMES, pts, tname, counts, shanten, shantenNormal, shantenChiitoi, isWin, isWinNormal,
   isSevenPairs, winShape, waitsOf, canWinTile, canTingWith, mulberry32, newRound, remaining, drawTile, visibleCounts, remainingOf,
   selfOptions, claimOptions, applyDiscard, applyPeng, applyMingang, applyAngang, applyBugang, computeScore, settleWin, settleDraw,
-  playRound, evalDiscards, threatsFor, danger, isIsolated, AI, LONG_NAMES, LONG_PTS, isQingyise, isYitiao, longTypes, longTypesC, scoreFor, waitBases, waitWeight, longPlan };
+  playRound, evalDiscards, threatsFor, danger, isIsolated, AI, LONG_NAMES, LONG_PTS, isQingyise, isYitiao, longTypes, longTypesC, scoreFor, waitBases, waitWeight, longPlan,
+  qiduiS, restrictTo, yitiaoInfo, yitiaoS, lowering, longRoutes, longValue, lvBetter, lvName, nearTie, TIE_PCT, NO_LONG, LONG_ROUTE_NAMES };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDD = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1504,7 +1606,7 @@ function fakeTingStr(r, rem) {
 /* shanten name of a discard-table row; unusable 听牌 rows read as 一向听 with the reason */
 const rowSName = r => r.fake ? `${fakeTingStr(r)}，算一向听` : sName(r.s);
 const ICON = { good: '✅', ok: '⚠️', bad: '❌', info: '📌' };
-const TYPE_LABEL = { efficiency: '牌效（进张少）', shanten: '退向听', danger: '防守（打危险牌）', fangpao: '放炮', tingTiming: '该报听没报', tingChoice: '报听选择', deadWait: '听死牌', tingLegal: '听口不够 6 点', missHu: '漏胡', missKong: '漏杠', claim: '碰杠判断' };
+const TYPE_LABEL = { efficiency: '牌效（进张少）', shanten: '退向听', danger: '防守（打危险牌）', fangpao: '放炮', tingTiming: '该报听没报', tingChoice: '报听选择', deadWait: '听死牌', tingLegal: '听口不够 6 点', longKeep: '进张差不多没留龙', missHu: '漏胡', missKong: '漏杠', claim: '碰杠判断' };
 
 function groupStr(tiles) {
   const s = tiles.slice().sort((a, b) => a - b), parts = [];
@@ -1594,44 +1696,21 @@ function discardTable(st, p, withEngine) {
       r.uk = tr.uk; r.ug = tr.ug; r.un = tr.un; r.goodTiles = tr.good; r.normTiles = tr.norm; r.ukTiles = tr.good.concat(tr.norm).sort((a, b) => a - b);
     }
     c[t]++;
-    if (eng) { r.danger = em[t].danger; r.rank = em[t].rank; r.plan = eng[em[t].rank].plan || null; }
+    if (eng) { const e = eng[em[t].rank]; r.danger = em[t].danger; r.rank = em[t].rank; r.plan = e.plan || null; if (e.lv) { r.lv = e.lv; r.tieGroup = true; } }
     rows.push(r);
   }
   const minS = Math.min(...rows.map(r => r.s));
-  return { rows, eng, rem, minS };
+  const tie = eng && eng[0].longTie ? eng[0].longTie : null;
+  // near-tie 龙 pick: also know the 龙 value of the other same-shanten rows (for the comparison texts)
+  if (tie) addLv(rows, pl.hand, pl.melds, rem, r => r.s === rows.find(x => x.tile === eng[0].tile).s);
+  return { rows, eng, rem, minS, tie };
 }
-/* ---------------- 龙 routes (display only; ranking / grading / AI unchanged) ----------------
+/* ---------------- 龙 routes (computed in logic.js G.longRoutes; also used by the near-tie 龙 ranking rule) ----------------
    For a 13-tile hand (after the discard) list the realistic 龙 routes next to the normal route, each with
    its own steps-to-听牌 and the 好进张 that advance it. Returns null when no 龙 route is realistic. */
-/* 七对 shanten counting the 7-different-kinds requirement (works on a suit-restricted hand too) */
-function qiduiS(c) {
-  let P = 0, S = 0; for (const x of c) { P += x >> 1; if (x & 1) S++; }
-  const need = Math.max(0, 7 - P); return Math.min(need, S) + 2 * Math.max(0, need - S) - 1;
-}
-function restrictTo(c, suit) { const r = new Array(34).fill(0); for (let k = 0; k < 9; k++) r[suit * 9 + k] = c[suit * 9 + k]; return r; }
-/* 一条龙: best over suits with ≤ 3 missing kinds of 1–9 */
-function yitiaoS(c, nm) {
-  if (nm > 1) return 99;
-  let best = 99;
-  for (let su = 0; su < 3; su++) {
-    const b = su * 9; let miss = 0; for (let k = 0; k < 9; k++) if (!c[b + k]) miss++;
-    if (miss > 3) continue;
-    const r = c.slice(); for (let k = 0; k < 9; k++) if (r[b + k]) r[b + k]--;
-    best = Math.min(best, G.shantenNormal(r, nm + 3) + miss);
-  }
-  return best;
-}
+const { qiduiS, yitiaoS, lowering } = G;
 const stepStr = s => s <= 0 ? '已听牌' : s === 1 ? '一向听' : `还差 ${s} 步`;
 const ROUTE_LABEL = { normal: '走普通', qidui: '走七对', qing: '走青龙', qingqd: '走青龙+七对', yitiao: '走一条龙' };
-/* tiles y (still unseen) whose draw lowers f() */
-function lowering(c, rem, f, only) {
-  const f0 = f(c), out = [];
-  for (let y = 0; y < 34; y++) {
-    if (c[y] >= 4 || !(rem[y] > 0) || (only && !only(y))) continue;
-    c[y]++; if (f(c) < f0) out.push(y); c[y]--;
-  }
-  return out;
-}
 /* tiles y (unseen) after which some discard leaves a normal-shape 听 with a live 6+ point wait */
 function usableNormalAfter(c, nm, rem) {
   const out = [];
@@ -1649,37 +1728,8 @@ function usableNormalAfter(c, nm, rem) {
 }
 function routeInfo(c, melds, rem) {
   melds = melds || []; const nm = melds.length;
-  const s = G.effShanten(c, nm, rem);
-  let sN = G.shantenNormal(c, nm), fakeN = false;
-  if (sN === 0) { // normal-shape 听牌 without a live 6+ point wait can't win: treat the normal route as 一向听
-    const wN = []; for (let w = 0; w < 34; w++) if (c[w] < 4) { c[w]++; if (G.isWinNormal(c)) wN.push(w); c[w]--; }
-    if (!G.usableTing(wN, rem)) { sN = 1; fakeN = true; }
-  }
-  const plan = G.longPlan(c, melds), longs = [];
-  let pairs = 0; for (const x of c) pairs += x >> 1;
-  // 七对 (any suits): no melds and 4+ pairs, or 七对 at most one step behind the normal shape
-  if (nm === 0 && (pairs >= 4 || G.shantenChiitoi(c, 0) <= sN + 1)) {
-    const sq = qiduiS(c);
-    if (sq <= 3) longs.push({ key: 'qidui', s: sq, base: G.LONG_PTS, tiles: lowering(c, rem, qiduiS) });
-  }
-  // 青龙: melds all in the main suit and at most 4 off-suit tiles
-  if (plan.off <= 4) {
-    const su = plan.suit, inSuit = y => y < 27 && ((y / 9) | 0) === su;
-    const fN = x => G.shantenNormal(restrictTo(x, su), nm), fQ = x => nm ? 99 : qiduiS(restrictTo(x, su));
-    const qn = fN(c), qq = fQ(c);
-    if (qq < qn) longs.push({ key: 'qingqd', s: qq, base: 2 * G.LONG_PTS, tiles: lowering(c, rem, fQ, inSuit), suit: su });
-    else longs.push({ key: 'qing', s: qn, base: G.LONG_PTS, alt: qq === qn ? 2 * G.LONG_PTS : 0, tiles: lowering(c, rem, fN, inSuit), suit: su });
-  }
-  // 一条龙: close (as close as the fastest route, or 一向听)
-  const yi = yitiaoS(c, nm);
-  if (yi <= Math.max(1, s)) longs.push({ key: 'yitiao', s: yi, base: G.LONG_PTS, tiles: lowering(c, rem, x => yitiaoS(x, nm)) });
+  const { s, sN, fakeN, longs } = G.longRoutes(c, melds, rem);
   if (!longs.length) return null;
-  // a 龙 route that is already 听 but has no live 6+ point wait can't 报听 either: one more step, its 进张 = tiles to a usable 听
-  if (s >= 1 && longs.some(l => l.s <= 0)) {
-    const fk = G.fakeTingUkeire(c, nm, rem).good;
-    for (const l of longs) if (l.s <= 0) { l.s = 1; l.tiles = l.suit != null ? fk.filter(y => y < 27 && ((y / 9) | 0) === l.suit) : fk.slice(); }
-  }
-  longs.sort((a, b) => a.s - b.s);
   // normal route: 好进张 on the normal shape (direct set / first pair, or 听牌 that can 报听)
   const b0 = G.structB(c, nm), normal = { key: 'normal', s: sN, tiles: [] };
   if (fakeN || (s === 1 && G.shanten(c, nm) === 0)) normal.tiles = usableNormalAfter(c, nm, rem); // the hand is an unusable 听: count tiles to a usable normal-shape 听
@@ -1703,6 +1753,7 @@ function routesFor(hand, melds, rem, tile) {
 }
 const routeScore = r => r.key === 'normal' ? `按牌点 约 6–${r.maxPts} 分` : `底分 ${r.base}，自摸 ${r.base * 2}${r.alt ? `（凑成七对 ${r.alt}）` : ''}`;
 const ROUTE_NAME = { qidui: '七对龙', qing: '青龙', qingqd: '青龙+七对', yitiao: '一条龙' };
+const lvStr = lv => `${G.lvName(lv)}（底分 ${lv.base}）`;
 /* is the discard of tile t (from 14-tile counts c14) actually chasing 龙 route l?  (the 龙 is the reason, not a side effect) */
 function routeJustified(c14, melds, t, after, l) {
   const sN = after.normal.s;
@@ -1730,11 +1781,40 @@ const ukStr = r => `进 ${r.uk}（好 ${r.ug} · 一般 ${r.un}）`;
    1 向听: 好进张 first (direct sets / pair / 报听-able 听牌), then total 进张 */
 const totalFirst = s => s >= 2;
 const effCmp = (a, b) => a.s - b.s || (totalFirst(a.s) ? b.uk - a.uk || b.ug - a.ug : b.ug - a.ug || b.uk - a.uk);
-/* best discards of a 牌效题 by the current rule (old saved questions are re-graded with it) */
-function effAnswer(rows) { const srt = rows.slice().sort(effCmp); return srt.filter(r => effCmp(r, srt[0]) === 0).map(r => r.tile); }
+/* primary 进张 key at that shanten */
+const tieKey = r => totalFirst(r.s) ? r.uk : r.ug;
+/* rows (r.s >= 1) of the near-tie group around the effCmp-best row */
+function tieGroup(srt) { const b = srt[0]; return b && b.s >= 1 ? srt.filter(r => r.s === b.s && G.nearTie(tieKey(r), tieKey(b))) : []; }
+/* r.lv (best realistic 龙 route, see G.longValue) for rows matching sel (default: all 1+ 向听 rows) */
+function addLv(rows, hand, melds, rem, sel) {
+  const c = G.counts(hand);
+  for (const r of rows) if (!r.lv && r.s >= 1 && (!sel || sel(r))) { c[r.tile]--; r.lv = G.longValue(c, melds || [], rem); c[r.tile]++; }
+  return rows;
+}
+/* full order: effCmp, then the near-tie 龙 rule moves the best 龙-keeping discard of the top group to the front */
+function effRank(rows) {
+  const srt = rows.slice().sort(effCmp), g = tieGroup(srt);
+  let w = srt[0]; for (const r of g) if (G.lvBetter(r.lv, w.lv)) w = r;
+  if (w !== srt[0]) { srt.splice(srt.indexOf(w), 1); srt.unshift(w); }
+  return srt;
+}
+/* best discards of a 牌效题 by the current rule (old saved questions are re-graded with it):
+   effCmp-best ones, or — when a near-tie discard keeps a better 龙 — every near-tie discard keeping that 龙 */
+function effAnswer(rows) {
+  const srt = rows.slice().sort(effCmp), g = tieGroup(srt), w = effRank(rows)[0];
+  if (w !== srt[0]) return [w].concat(g.filter(r => r !== w && !G.lvBetter(w.lv, r.lv))).map(r => r.tile);
+  return srt.filter(r => effCmp(r, srt[0]) === 0).map(r => r.tile);
+}
+/* '两种打法向听一样，进张只差 3 张，推荐保留一条龙（底分 20）' (a keeps a better 龙 than b) */
+function tieWhy(a, b) {
+  const d = Math.abs(tieKey(a) - tieKey(b)), k = totalFirst(a.s) ? '进张' : '好进张';
+  return `两种打法向听一样，${k}${d ? `只差 ${d} 张` : '一样多'}，推荐保留${lvStr(a.lv)}`;
+}
+const lostStr = (a, b) => b.lv && b.lv.base ? `打 ${tn(b.tile)} 只能走${G.lvName(b.lv)}（底分 ${b.lv.base}${b.lv.base === a.lv.base ? `，还差 ${b.lv.s} 步` : ''}）` : `打 ${tn(b.tile)} ${G.lvName(a.lv)}就做不成了`;
 /* one-line reason why row a beats row b */
 function effWhy(a, b) {
   if (a.s !== b.s) return `打 ${tn(b.tile)} 会退成${sName(b.s)}`;
+  if (a.s >= 1 && a.lv && b.lv && G.lvBetter(a.lv, b.lv) && G.nearTie(tieKey(a), tieKey(b))) return `${tieWhy(a, b)}；${lostStr(a, b)}`;
   if (totalFirst(a.s)) {
     if (a.uk !== b.uk) return `总进张多 ${a.uk - b.uk} 张（${a.uk} 对 ${b.uk}）`;
     if (a.ug !== b.ug) return `总进张一样多（${a.uk} 张），好进张多 ${a.ug - b.ug} 张（${a.ug} 对 ${b.ug}）`;
@@ -1765,7 +1845,8 @@ function analyzeSelf(d) {
   const eng = G.AI.selfTurn(st, 0, o);
   const recTile = tb.eng[0].tile, recTing = o.tingOptions.some(x => x.tile === recTile);
   out.rec = { type: 'discard', tile: recTile, ting: recTing };
-  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, fake: !!r.fake, uk: r.uk, ug: r.ug, un: r.un, goodTiles: r.goodTiles, normTiles: r.normTiles, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger, wb: r.wb || null }));
+  out.rows = tb.rows.slice().sort((x, y) => x.rank - y.rank).map(r => ({ tile: r.tile, s: r.s, fake: !!r.fake, uk: r.uk, ug: r.ug, un: r.un, goodTiles: r.goodTiles, normTiles: r.normTiles, waits: r.waits, legal: r.legal, winRem: r.winRem, danger: r.danger, wb: r.wb || null, lv: r.lv || null, tieGroup: !!r.tieGroup }));
+  out.tie = tb.tie;
   out.rem = tb.rem;
   const K = byT[a.tile], R = byT[recTile];
   const B = tb.rows.filter(r => r.s === tb.minS).sort(effCmp)[0];
@@ -1773,9 +1854,13 @@ function analyzeSelf(d) {
   out.k = { tile: K.tile, s: K.s, fake: !!K.fake, uk: K.uk, ug: K.ug, un: K.un, danger: K.danger }; out.threats = threats;
   // 进张 text; an unusable 听牌 row first says why it is only 一向听
   const uks = r => r.fake ? `${fakeTingStr(r)}，算一向听，${ukStr(r)}` : ukStr(r);
+  const sk = r => r.fake ? uks(r) : `${sName(r.s)}，${ukStr(r)}`;
   let v = 'good', type = null, msg = '', sev = 0;
   const note = t => { try { return routeNote(pl.hand, pl.melds, tb.rem, t); } catch (e) { return { doing: '', also: '' }; } };
-  if (K.tile === R.tile) {
+  if (K.tile === R.tile && tb.tie && K.lv) {
+    const O = byT[tb.tie.over];
+    msg = `${sk(K)}，和推荐一致；${tieWhy(R, O)}；${lostStr(R, O)}`;
+  } else if (K.tile === R.tile) {
     const nk = K.s > 0 ? note(K.tile) : null;
     msg = K.s === 0 ? `听 ${waitsStr(K, tb.rem)}，能胡的还剩 ${K.winRem} 张` : `${K.fake ? uks(K) : `${sName(K.s)}，${ukStr(K)}`}，和推荐一致${nk.doing ? `，在做${nk.doing}` : ''}${nk.also ? `；${nk.also}` : ''}`;
   } else if (threats.length && K.danger > R.danger && K.danger >= 3) {
@@ -1802,6 +1887,15 @@ function analyzeSelf(d) {
       msg = rl && (!kl || rl.base > kl.base) ? `打 ${tn(R.tile)} 听 ${waitsStr(R, tb.rem)}，胡 ${tn(rl.w)} 成${longStr(rl.longs)}（底分 ${rl.base}）；你打 ${tn(K.tile)} ${kl ? '只有' + longStr(kl.longs) : '没有龙'}`
         : `打 ${tn(R.tile)} 听 ${waitsStr(R, tb.rem)}，能胡 ${R.winRem} 张；你打 ${tn(K.tile)} 只有 ${K.winRem} 张`;
       sev = 6 + Math.max(0, (R.winRem - K.winRem) * 2) + (rl && !kl ? 6 : 0);
+    }
+  } else if (tb.tie && K.s === R.s && K.tieGroup && K.lv) {
+    // near tie: same shanten, primary 进张 within 10% -> the discard keeping the 龙 is recommended
+    if (!G.lvBetter(R.lv, K.lv)) {
+      msg = `${sk(K)}，和推荐的打 ${tn(R.tile)} 一样保留${lvStr(K.lv)}，${totalFirst(K.s) ? '进张' : '好进张'}差不多`;
+    } else {
+      v = 'ok'; type = 'longKeep';
+      msg = `打 ${tn(R.tile)} ${uks(R)}；你打 ${tn(K.tile)} ${uks(K)}。${tieWhy(R, K)}；${lostStr(R, K)}`;
+      sev = 3 + (R.lv.base - (K.lv.base || 0)) / 10;
     }
   } else if (R.plan && K.s === R.s) {
     const nr = note(R.tile);
@@ -1982,7 +2076,7 @@ function exportText(rec, an) {
   L.push('规则: 136张无花; 可碰杠不可吃; 必须报听才能胡, 报听后手牌锁定; 报听需听口含6点以上; 牌点=数字, 字牌10; 1-2点不能胡, 3-5点只能自摸, 6点以上可自摸可点炮; 龙: 青龙(清一色,含副露全是一门数牌)/七对龙(七对,只能门清,四张算两对)/一条龙(门清顺子123456789同一门) 每种底分20可叠加(七对龙与一条龙互斥), 有龙时底分代替胡牌点数, 但能否胡仍看胡的那张牌的点数; 得分=底分(无龙时为胡牌点数)×2(自摸)×2^暗杠数; 自摸三家各付; 未报听者点炮包胡(付3份), 已报听者点炮三家各付; 无耗子无庄分');
   L.push('座位: ' + [0, 1, 2, 3].map(i => `${NAMES[i]}(${WINDS[(i - rec.dealer + 4) % 4]}${i === rec.dealer ? '/庄' : ''})`).join(' ') + ' | 开局分: ' + [0, 1, 2, 3].map(i => `${NAMES[i]} ${rec.scores0[i]}`).join(' '));
   L.push(`Kevin配牌: [${groupStr(rec.hands0[0])}]`);
-  L.push('--- 过程（Kevin 每手附引擎推荐与评价；[进 N（好 a · 一般 b）] = 打后进张: 好进张=直接成组/补将/可报听的听牌, 一般=其余; 推荐先比向听; 差2步以上先比总进张再比好进张, 一向听先比好进张再比总进张）---');
+  L.push('--- 过程（Kevin 每手附引擎推荐与评价；[进 N（好 a · 一般 b）] = 打后进张: 好进张=直接成组/补将/可报听的听牌, 一般=其余; 推荐先比向听; 差2步以上先比总进张再比好进张, 一向听先比好进张再比总进张; 向听一样且进张差10%以内时优先保留龙）---');
   const pend = [null, null, null, null]; let dec = null;
   for (const e of rec.events) {
     const xs = `第${e.xun || 1}巡`;
@@ -2057,7 +2151,7 @@ function aggregate(list) {
 
 /* ---------------- drills ---------------- */
 const DRILLS = {
-  xiaolv: { name: '牌效题', desc: '14 张手牌，打哪张牌效最好？（向听远看总进张，一向听看好进张）' },
+  xiaolv: { name: '牌效题', desc: '14 张手牌，打哪张牌效最好？（向听远看总进张，一向听看好进张，差不多时留龙）' },
   tingpai: { name: '听牌题', desc: '13 张手牌，听哪几张？能不能报听？' },
   baoting: { name: '报听选择', desc: '几种报听打法，哪种最好？' },
   fangshou: { name: '防守题', desc: '对手已报听，打哪张最安全？' },
@@ -2105,14 +2199,15 @@ async function genXiaolv(rng) {
     // favour positions where the 好/一般 split matters (1-向听 进张 almost always lead to 报听-able 听牌)
     const tierful = tb.rows.some(r => r.s === tb.minS && r.un > 0);
     if (!tierful && rng() < 0.85) return null;
-    // ranking: effCmp (shanten; 2+ 向听 total 进张 first, 1 向听 好进张 first)
-    const srt = tb.rows.slice().sort(effCmp), top = srt[0];
+    // ranking: effCmp (shanten; 2+ 向听 total 进张 first, 1 向听 好进张 first) + near-tie 龙 rule
+    addLv(tb.rows, me.hand, me.melds, tb.rem, r => r.s === tb.minS);
+    const srt = effRank(tb.rows), top = srt[0];
     const ans = effAnswer(tb.rows);
     const others = tb.rows.filter(r => !ans.includes(r.tile));
     if (ans.length > 2 || top.uk < 8 || top.ug < 4) return null;
     if (!others.some(r => r.s === tb.minS && (r.ug <= top.ug - 3 || r.uk <= top.uk - 4))) return null;
     return { id: mkId('xiaolv', rng), type: 'xiaolv', hand: sorted(me.hand), drawn: me.drawn, melds: me.melds.map(m => ({ type: m.type, tile: m.tile })), seen: seenOf(s),
-      minS: tb.minS, rows: tb.rows.map(r => ({ tile: r.tile, s: r.s, fake: !!r.fake, waits: r.fake ? r.waits : undefined, legal: r.fake ? r.legal : undefined, uk: r.uk, ug: r.ug, un: r.un, ukTiles: r.ukTiles, goodTiles: r.goodTiles, normTiles: r.normTiles })), answer: ans };
+      minS: tb.minS, v18: 1, rows: tb.rows.map(r => ({ tile: r.tile, s: r.s, fake: !!r.fake, waits: r.fake ? r.waits : undefined, legal: r.fake ? r.legal : undefined, uk: r.uk, ug: r.ug, un: r.un, ukTiles: r.ukTiles, goodTiles: r.goodTiles, normTiles: r.normTiles, lv: r.lv || undefined })), answer: ans };
   });
 }
 async function genTingpai(rng) {
@@ -2329,7 +2424,11 @@ function checkAnswer(q, ans) {
 }
 /* 牌效题 saved under an older ranking (错题本) are re-graded with the current rule */
 function normQ(q) {
-  if (q && q.type === 'xiaolv' && q.rows && q.rows.length) q.answer = effAnswer(q.rows);
+  if (q && q.type === 'xiaolv' && q.rows && q.rows.length) {
+    // saved before v18: add the 龙 value of each row (near-tie 龙 rule) from the question's own hand / seen tiles
+    if (!q.v18 && q.hand && q.seen) { try { const mn = Math.min(...q.rows.map(r => r.s)); addLv(q.rows, q.hand, q.melds, remFromSeen(q.hand, q.seen), r => r.s === mn); } catch (e) { /* keep old rows */ } q.v18 = 1; }
+    q.answer = effAnswer(q.rows);
+  }
   /* 防守题 saved before the 报听 tile was face down: re-grade without peeking at it */
   if (q && q.type === 'fangshou' && q.rows && q.rows.length && q.seen && !q.v16) {
     q.rows = q.rows.map(r => Object.assign({}, r, safetyTier(r.tile, q.hand, q.seen)));
@@ -2338,7 +2437,7 @@ function normQ(q) {
   return q;
 }
 
-const api = { fakeTingStr, rowSName, routeInfo, routesFor, routeNote, routeScore, stepStr, qiduiS, yitiaoS, ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
+const api = { effRank, tieKey, tieWhy, addLv, lvStr, fakeTingStr, rowSName, routeInfo, routesFor, routeNote, routeScore, stepStr, qiduiS, yitiaoS, ukStr, effCmp, effAnswer, totalFirst, normQ, effWhy, synthLong, payFor, tingRows, bestTing, resultLine, cloneO, recordingAgent, recordingHooks, NAMES, TYPE_LABEL, ICON, DRILLS, WCLS, sName, groupStr, snap, newRecord, recEvent, recDecision, recFinish, discardTable, analyzeSelf, analyzeClaim, claimFacts, claimReasons, analyzeRecord,
   exportText, handStats, aggregate, genQuestion, checkAnswer, safetyTier, remFromSeen, payFor, tingRows, bestTing, waitClass, simCapture, setYield, seenOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.KDDT = api;
@@ -2882,7 +2981,12 @@ function computeHint(rem) {
     let rn = { doing: '', also: '' }, rts = null;
     if (TT && TT.routeNote && b.s > 0) { try { rn = TT.routeNote(me.hand, me.melds, rem, b.tile); rts = TT.routesFor(me.hand, me.melds, rem, b.tile); } catch (e) { console.error(e); } }
     // '做青龙/七对龙' only when the discard really chases that 龙 (otherwise neutral reason + a short 龙 note)
-    if (b.plan === 'qing' && /青龙/.test(rn.doing)) { short = '做青龙'; reason = `手里几乎都是同一门，打掉杂牌做清一色（青龙），胡了底分 ${G.LONG_PTS} 起，不看胡牌点数`; }
+    const lt = b.longTie, ov = lt ? ev.find(x => x.tile === lt.over) : null;
+    if (lt && ov) {
+      const d = Math.abs(lt.key - lt.overKey), k = b.s >= 2 ? '进张' : '好进张', nm = G.lvName(lt.lv);
+      short = `留${nm}`;
+      reason = `两种打法向听一样，${k}${d ? `只差 ${d} 张` : '一样多'}，推荐保留${nm}（底分 ${lt.lv.base}）；打 ${G.tname(ov.tile)} ${lt.overLv && lt.overLv.base ? `只能走${G.lvName(lt.overLv)}` : `${nm}就做不成了`}`;
+    } else if (b.plan === 'qing' && /青龙/.test(rn.doing)) { short = '做青龙'; reason = `手里几乎都是同一门，打掉杂牌做清一色（青龙），胡了底分 ${G.LONG_PTS} 起，不看胡牌点数`; }
     else if (b.plan === 'qidui' && /七对/.test(rn.doing)) { short = '做七对龙'; reason = `已经有 5 对以上，留对子打单张做七对（七对龙），胡了底分 ${G.LONG_PTS} 起`; }
     else if (b.isolated && b.tile >= 27) { short = '孤张字牌'; reason = '孤张字牌很难成型'; }
     else if (b.isolated) { short = '孤张'; reason = '孤张，周围没有能连的牌'; }
@@ -2892,7 +2996,7 @@ function computeHint(rem) {
     const tail = b.s === 0 ? `打后听 ${ws(b.waits)}` : b.fake ? `打后${TT && TT.fakeTingStr ? TT.fakeTingStr(b) : '听口不到 6 点，不能报听'}，算一向听，进 ${b.ukeire} 张（<b class="ukg">好 ${b.ug}</b>，都是摸到后能变成可报听的听牌）` : `打后 ${b.s} 向听，进 ${b.ukeire} 张（<b class="ukg">好 ${b.ug}</b> · <span class="ukn">一般 ${b.un}</span>）`;
     const gl = b.s > 0 && rts ? `<div class="hgood rts">${routesHTML(rts, rem, null, 'hrt')}</div>`
       : b.s > 0 && b.good && b.good.length ? `<div class="hgood"><span class="hgl">好进张 <b class="ukg">${b.ug}</b> 张：</span>${ukTilesHTML(b.good, rem)}</div>` : '';
-    return { rec: b.tile, short: `打 <b>${name}</b> · ${short}`, text: `${reason}；${tail}${rn.also && !rn.doing ? '。' + rn.also : ''}。${gl}` };
+    return { rec: b.tile, short: `打 <b>${name}</b> · ${short}`, text: `${reason}；${tail}${rn.also && !rn.doing && !lt ? '。' + rn.also : ''}。${gl}` };
   }
   if (pending && pending.kind === 'claim') {
     const d = G.AI.claim(st, 0, pending.t, pending.o);
@@ -3197,7 +3301,7 @@ function showRules() {
   <h3>报听与点数</h3><ul><li><b>必须报听才能胡</b>；报听后手牌锁定，只能打出摸到的牌。</li><li>报听时打的那张要<b>扣着打</b>（牌背朝上）：别人看不到是什么牌，也<b>不能碰、杠、胡</b>这张；本局结束后才翻开。你自己扣的那张只有你看得到（半透明、虚线框）。</li><li>数字牌按面值算点，字牌 10 点；听口里要有 6 点以上的牌才能报听。</li><li>1–2 点不能胡；3–5 点只能自摸；6 点以上自摸、点炮都能胡。</li></ul>
   <h3>算分</h3><ul><li>得分 = 底分（没有龙时 = 胡的那张牌的点数；有龙时 = 每种龙 20）；自摸 ×2；每个暗杠再 ×2。</li><li>自摸：三家各付一份。点炮：没报听的人点炮 → 一个人包三家；已报听的人点炮 → 三家各付一份。</li><li>不带耗子、不带庄分；牌墙摸完没人胡算流局，庄家没胡就轮庄。</li></ul>
   <h3>龙（加分牌型）</h3><ul><li><b>青龙</b>：清一色，整手牌连副露都是同一门数字牌，没有字牌，什么牌型都行。</li><li><b>七对龙</b>：七对胡牌，只能门清；四张一样的算两对。</li><li><b>一条龙</b>：普通牌型里有同一门的 123、456、789 三组顺子（门清，不能吃）。</li><li>每种龙底分 <b>20</b>，可以叠加：青龙 + 七对龙 = 40，青龙 + 一条龙 = 40（七对龙和一条龙不会同时出现）。有龙时<b>底分代替胡牌那张的点数</b>，再算自摸 ×2、暗杠 ×2。</li><li>注意：<b>能不能胡仍然看胡的那张牌</b>——要报听、听口要有 6 点以上才能报听；胡 1–2 点的牌不能胡，3–5 点只能自摸，6 点以上才能点炮胡，有龙也一样。</li><li>例：青龙 20 + 七对龙 20 = 40 × 自摸 2 = 80 分，三家各付 80。</li></ul>
-  <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数（离听牌越近越好）。离听牌还差 2 步以上时，先比<b>总进张</b>，牌越宽越好，总进张一样再比好进张；只差 1 步（一向听）时，先比<b class="ukg">好进张</b>，好进张一样再比总进张。都一样时才看孤张字牌、点数等小细节。</li></ul>
+  <h3>牌效与提示（不影响规则）</h3><ul><li><b>进张</b>：摸到后能让向听数减少的牌，按场上还剩的张数算。</li><li><b class="ukg">好进张</b>：摸到后直接凑成一组顺子/刻子、补出还缺的将（第一对），或直接听牌；走七对时凑出新对子也算。<span class="ukn">一般进张</span>：其余进张，比如孤张变成搭子、多一个对子当搭子用。</li><li>显示：<b>进 61（好 24 · 一般 37）</b>；手牌下方的 <b>24/61</b> = 好进张/总进张。</li><li>推荐打法：先比向听数（离听牌越近越好）。离听牌还差 2 步以上时，先比<b>总进张</b>，牌越宽越好，总进张一样再比好进张；只差 1 步（一向听）时，先比<b class="ukg">好进张</b>，好进张一样再比总进张。两种打法向听一样、进张只差 <b>10% 以内</b>时，优先选<b>能保留龙</b>（一条龙、七对龙、青龙）的打法：龙底分越高越好，一样再看离龙更近的。都一样时才看孤张字牌、点数等小细节。</li></ul>
   <h3>操作</h3><ul><li>点一下选牌（牌会抬起），再点一次打出；也可以把牌向上拖出去。</li><li>右上角的对话气泡按钮是「语音报牌」：点一下开 / 关，开着时会念出每张打出的牌，以及碰、杠、听、胡、自摸；和音效按钮分开控制。<b>长按</b>（电脑上点<b>右键</b>）这个按钮可以<b>选声音</b>和语速，大厅右上角的「语音」也能进；默认自动挑这台设备上最自然的中文声音。<button class="lnk" id="rulesVoice">选声音 ›</button></li><li>手机请横屏玩；安卓可以点右上角「全屏」锁定横屏。</li><li>电脑：鼠标点选、再点打出；键盘 <b>← →</b> 选牌，<b>Enter</b> 或 <b>↑</b> 打出，<b>空格</b> 过，<b>H</b> 胡 · <b>P</b> 碰 · <b>G</b> 杠 · <b>T</b> 听，<b>Esc</b> 取消，<b>F</b> 全屏。</li></ul></div>
   <div class="mfoot"><button class="gbtn" id="closeRules2">知道了</button></div>`);
   $('closeRules').onclick = hideModal; $('closeRules2').onclick = hideModal; $('rulesVoice').onclick = () => showVoicePicker(showRules);
@@ -3514,7 +3618,7 @@ function renderDrill() {
   const s = D, q = T.normQ(s.qs[s.i]), done = !!s.res;
   let prompt = '', board = '', side = '', hand = '', cls = q.type;
   if (q.type === 'xiaolv') {
-    prompt = `打哪张<b>牌效最好</b>？<small>先比向听；差 2 步以上先比<b>总进张</b>，一向听先比<b class="ukg">好进张</b>（按场上还剩的张数算）</small>`;
+    prompt = `打哪张<b>牌效最好</b>？<small>先比向听；差 2 步以上先比<b>总进张</b>，一向听先比<b class="ukg">好进张</b>（按场上还剩的张数算）；进张差 10% 以内优先留龙</small>`;
     board = pondsHTML(q.seen) + `<div class="wleft">牌墙还剩 ${q.seen.left} 张</div>`;
     const by = {}; q.rows.forEach(r => { by[r.tile] = r; });
     const opt = { melds: q.melds, act: done ? null : 'pick', selT: done ? null : s.selT, selK: done ? null : s.selK };
@@ -3527,7 +3631,7 @@ function renderDrill() {
     if (!done) side = selBox('打');
     else {
       const best = by[q.answer[0]], mine = by[s.ans];
-      const srt = q.rows.slice().sort(T.effCmp), top = srt.slice(0, 5);
+      const srt = T.effRank(q.rows), top = srt.slice(0, 5);
       if (!s.res.correct && !top.includes(mine)) top[4] = mine;
       // why the best wins: vs your pick, or vs the runner-up when you were right
       const rival = s.res.correct ? srt.find(r => !q.answer.includes(r.tile)) : mine;
@@ -3788,7 +3892,7 @@ function renderReview() {
     opts = `<div class="otab uk rvt">${rows.map(r => {
       const isRec = r.tile === recT, isMine = r.tile === myT && !isRec;
       const o1 = r.s === 0 ? (r.legal ? '可报听' : '听(<6点)') : r.fake ? '算一向听' : T.sName(r.s);
-      const dg = r.danger >= 6 ? ' <em class="dg">危险</em>' : '';
+      const dg = (r.danger >= 6 ? ' <em class="dg">危险</em>' : '') + (it.tie && recRow && recRow.lv && r.tieGroup && r.lv && r !== recRow && G.lvBetter(recRow.lv, r.lv) ? ` <em class="lx">${r.lv.base ? '龙更小' : '没' + G.lvName(recRow.lv)}</em>` : '');
       if (r.s === 0 || !rem || !r.goodTiles) return `<div class="orow ${isRec ? 'best' : isMine ? 'mine' : ''}">${tl(r.tile, 'tp')}<span class="o1">${o1}</span><span class="o2">${r.s === 0 ? `听 ${r.waits.map(tn).join(' ')} · 能胡 ${r.winRem}` : `进 ${r.uk}（<b class="ukg">好 ${r.ug}</b> · <span class="ukn">一般 ${r.un}</span>）`}${dg}</span></div>`;
       return ukRow(r, rem, { routes: routesOf(me.hand, me.melds, rem, r.tile), cls: isRec ? 'best' : isMine ? 'mine' : '', open: isRec || isMine, tag: isRec ? '推荐' : isMine ? '你打' : '', hi: isRec ? onlyRec : null,
         o1, o2: (r.fake ? `<b class="ukg">好 ${r.ug}</b> <span class="fkt">${fakeShort(r)}</span>` : T.totalFirst(r.s) ? `<b>进 ${r.uk}</b> <span class="ukn">· 好 ${r.ug} · 一般 ${r.un}</span>` : `<b class="ukg">好 ${r.ug}</b> <span class="ukn">· 一般 ${r.un}</span>`) + dg });
